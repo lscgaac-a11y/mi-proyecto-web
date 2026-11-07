@@ -103,11 +103,19 @@ async function cargarAvancesAdmin() {
 // --- FUNCIONES CAPTURISTA ---
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
+
+  // Extraer, limpiar y convertir a MAYÚSCULAS para formato de Lista Nominal
+  const apellidos = document.getElementById('simpApellidos').value.trim().toUpperCase();
+  const nombres = document.getElementById('simpNombres').value.trim().toUpperCase();
+  
+  // Unimos el texto: "APELLIDOS, NOMBRES"
+  const nombreFormatoLista = `${apellidos}, ${nombres}`;
+
   const res = await fetch('/api/simpatizantes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      nombre: document.getElementById('simpNombre').value,
+      nombre: nombreFormatoLista,
       telefono: document.getElementById('simpTelefono').value,
       seccion: document.getElementById('simpSeccion').value,
       localidad: document.getElementById('simpLocalidad').value,

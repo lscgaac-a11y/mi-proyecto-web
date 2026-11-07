@@ -85,32 +85,40 @@
     </div>
 
     <!-- VISTA 3: CAPTURISTA DE SIMPATIZANTES -->
-    <div id="vista-capturista" style="display: none;" class="card form-centered">
-      <h2>Captura de Simpatizante</h2>
-      <form id="formSimpatizante">
-        <div class="form-group">
-          <label>Nombre Completo:</label>
-          <input type="text" id="simpNombre" required>
-        </div>
-        <div class="form-group">
-          <label>Teléfono:</label>
-          <input type="text" id="simpTelefono">
-        </div>
-        <div class="form-group">
-          <label>Sección Electoral:</label>
-          <input type="text" id="simpSeccion" placeholder="Ej. 0645" required>
-        </div>
-        <div class="form-group">
-          <label>Localidad / Colonia:</label>
-          <input type="text" id="simpLocalidad" required>
-        </div>
-        <div class="form-group">
-          <label>Referencia (Quién lo invita / Notas):</label>
-          <textarea id="simpReferencia" rows="2"></textarea>
-        </div>
-        <button type="submit" class="btn-primary">Guardar Simpatizante</button>
-      </form>
+<div id="vista-capturista" style="display: none;" class="card form-centered">
+  <h2>Captura de Simpatizante</h2>
+  <form id="formSimpatizante">
+    
+    <!-- NUEVOS CAMPOS SEPARADOS -->
+    <div class="form-group">
+      <label>Apellido Paterno y Materno:</label>
+      <input type="text" id="simpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required>
     </div>
+    <div class="form-group">
+      <label>Nombre(s):</label>
+      <input type="text" id="simpNombres" placeholder="Ej. JUAN" required>
+    </div>
+    <!-- FIN NUEVOS CAMPOS -->
+
+    <div class="form-group">
+      <label>Teléfono:</label>
+      <input type="text" id="simpTelefono">
+    </div>
+    <div class="form-group">
+      <label>Sección Electoral:</label>
+      <input type="text" id="simpSeccion" placeholder="Ej. 0645" required>
+    </div>
+    <div class="form-group">
+      <label>Localidad / Colonia:</label>
+      <input type="text" id="simpLocalidad" required>
+    </div>
+    <div class="form-group">
+      <label>Referencia (Quién lo invita / Notas):</label>
+      <textarea id="simpReferencia" rows="2"></textarea>
+    </div>
+    <button type="submit" class="btn-primary">Guardar Simpatizante</button>
+  </form>
+</div>
 
     <!-- VISTA 4: PASE DE LISTA -->
 <div id="vista-lista" style="display: none;" class="card">
