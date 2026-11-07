@@ -86,16 +86,100 @@ document.getElementById('formCrearUsuario').addEventListener('submit', async (e)
   }
 });
 
+// --- FUNCIONES ADMINISTRADOR ---
+let chartAvances = null; // Variable global para guardar la gráfica
+
+function toggleSeccionAdmin() {
+  const rol = document.getElementById('nuevoRol').value;
+  document.getElementById('divSeccionAdmin').style.display = (rol === 'pase_lista') ? 'block' : 'none';
+}
+
+document.getElementById('formCrearUsuario').addEventListener('submit', async (e) => {
+  // ... (mantén el código del formCrearUsuario igual)
+  e.preventDefault();
+  const res = await fetch('/api/usuarios', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      usuario: document.getElementById('nuevoUsuario').value,
+      password: document.getElementById('nuevoPassword').value,
+      rol: document.getElementById('nuevoRol').value,
+      seccion_asignada: document.getElementById('nuevaSeccionAsignada').value
+    })
+  });
+
+  if (res.ok) {
+    alert('Usuario creado con éxito');
+    document.getElementById('formCrearUsuario').reset();
+    toggleSeccionAdmin();
+  } else {
+    alert('Error al crear usuario. Verifica que el nombre no exista ya.');
+  }
+});
+
 async function cargarAvancesAdmin() {
   const res = await fetch('/api/avances');
   const datos = await res.json();
-  const tbody = document.getElementById('tablaAvances');
   
+  // 1. Llenar tabla resumen
+  const tbody = document.getElementById('tablaAvances');
   tbody.innerHTML = datos.map(d => `
     <tr>
       <td><strong>${d.seccion}</strong></td>
       <td>${d.total_registrados}</td>
       <td>${d.total_asistieron}</td>
+    </tr>
+  `).join('');
+
+  // 2. Dibujar Gráfica
+  const ctx = document.getElementById('graficaAvances').getContext('2d');
+  if (chartAvances) chartAvances.destroy(); // Borra la anterior si ya existía para actualizarla
+
+  chartAvances = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: datos.map(d => `Secc ${d.seccion}`),
+      datasets: [
+        {
+          label: 'Faltan de Votar',
+          data: datos.map(d => d.total_registrados - d.total_asistieron),
+          backgroundColor: '#94a3b8' // Gris
+        },
+        {
+          label: 'Ya Votaron',
+          data: datos.map(d => d.total_asistieron),
+          backgroundColor: '#16a34a' // Verde
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true }
+      }
+    }
+  });
+
+  // 3. Cargar la lista global de simpatizantes
+  cargarListaGlobalAdmin();
+}
+
+async function cargarListaGlobalAdmin() {
+  const res = await fetch('/api/simpatizantes-todos');
+  const datos = await res.json();
+  const tbody = document.getElementById('tablaGlobalAdmin');
+  
+  tbody.innerHTML = datos.map(simp => `
+    <tr>
+      <td><span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-weight:600;">${simp.seccion}</span></td>
+      <td><strong>${simp.nombre}</strong></td>
+      <td>${simp.telefono || '---'}</td>
+      <td>
+        ${simp.asistio 
+          ? `<span style="color: #166534; font-weight: bold;">✅ Ya Votó</span>` 
+          : `<span style="color: #991b1b; font-weight: bold;">⏳ Pendiente</span>`}
+      </td>
     </tr>
   `).join('');
 }

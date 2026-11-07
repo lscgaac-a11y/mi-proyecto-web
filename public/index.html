@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="stylesheet" href="styles.css">
+<!-- Librería para gráficas -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Red de Simpatizantes</title>
@@ -35,36 +38,76 @@
       <div id="loginError" class="alert-error" style="display:none; margin-top:10px;"></div>
     </div>
 
-    <!-- VISTA 2: PANEL DE ADMINISTRADOR -->
-    <div id="vista-admin" style="display: none;">
-      
-      <div class="grid-2">
-        <!-- Formulario para crear usuarios -->
-        <section class="card">
-          <h3>Crear Nuevo Usuario (Staff)</h3>
-          <form id="formCrearUsuario">
-            <div class="form-group">
-              <label>Nombre de Usuario:</label>
-              <input type="text" id="nuevoUsuario" required>
-            </div>
-            <div class="form-group">
-              <label>Contraseña temporal:</label>
-              <input type="text" id="nuevoPassword" required>
-            </div>
-            <div class="form-group">
-              <label>Rol:</label>
-              <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
-                <option value="capturista">Capturista (Registra simpatizantes)</option>
-                <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
-              </select>
-            </div>
-            <div class="form-group" id="divSeccionAdmin" style="display:none;">
-              <label>Asignar Sección Electoral (Solo para Pase de Lista):</label>
-              <input type="text" id="nuevaSeccionAsignada" placeholder="Ej. 0645">
-            </div>
-            <button type="submit" class="btn-primary">Crear Usuario</button>
-          </form>
-        </section>
+   <!-- VISTA 2: PANEL DE ADMINISTRADOR -->
+<div id="vista-admin" style="display: none;">
+  
+  <div class="grid-2">
+    <!-- Formulario para crear usuarios -->
+    <section class="card">
+      <h3>Crear Nuevo Usuario (Staff)</h3>
+      <form id="formCrearUsuario">
+        <div class="form-group">
+          <label>Nombre de Usuario:</label>
+          <input type="text" id="nuevoUsuario" required>
+        </div>
+        <div class="form-group">
+          <label>Contraseña temporal:</label>
+          <input type="text" id="nuevoPassword" required>
+        </div>
+        <div class="form-group">
+          <label>Rol:</label>
+          <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
+            <option value="capturista">Capturista (Registra simpatizantes)</option>
+            <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
+          </select>
+        </div>
+        <div class="form-group" id="divSeccionAdmin" style="display:none;">
+          <label>Asignar Sección Electoral (Solo para Pase de Lista):</label>
+          <input type="text" id="nuevaSeccionAsignada" placeholder="Ej. 0645">
+        </div>
+        <button type="submit" class="btn-primary">Crear Usuario</button>
+      </form>
+    </section>
+
+    <!-- Tabla resumen -->
+    <section class="card">
+      <h3>Resumen Numérico</h3>
+      <button onclick="cargarAvancesAdmin()" class="btn-secondary" style="margin-bottom: 10px;">Actualizar Datos</button>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Sección</th>
+            <th>Padrón</th>
+            <th>Ya Votaron</th>
+          </tr>
+        </thead>
+        <tbody id="tablaAvances"></tbody>
+      </table>
+    </section>
+
+    <!-- Gráfica Visual -->
+    <section class="card" style="grid-column: 1 / -1;">
+      <h3>Gráfica de Avance por Sección Electoral</h3>
+      <canvas id="graficaAvances" height="80"></canvas>
+    </section>
+
+    <!-- Lista Global de Votantes -->
+    <section class="card" style="grid-column: 1 / -1;">
+      <h3>Lista General de Simpatizantes (Estatus de Votación)</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Sección</th>
+            <th>Nombre</th>
+            <th>Teléfono</th>
+            <th>Estatus</th>
+          </tr>
+        </thead>
+        <tbody id="tablaGlobalAdmin"></tbody>
+      </table>
+    </section>
+  </div>
+</div>
 
         <!-- Tabla de avances por sección -->
         <section class="card">

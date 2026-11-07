@@ -137,6 +137,15 @@ app.get('/api/avances', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener avances' });
   }
 });
+// 7. Administrador: Ver todos los simpatizantes (Lista Global)
+app.get('/api/simpatizantes-todos', async (req, res) => {
+  try {
+    const resultado = await pool.query('SELECT * FROM simpatizantes ORDER BY seccion ASC, nombre ASC');
+    res.json(resultado.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener lista global' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor activo en puerto ${PORT}`);
