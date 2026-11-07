@@ -150,3 +150,22 @@ async function cambiarAsistencia(id, asistio) {
     body: JSON.stringify({ asistio })
   });
 }
+// --- FUNCIÓN DE BÚSQUEDA EN PASE DE LISTA ---
+function filtrarLista() {
+  const filtro = document.getElementById('buscadorLista').value.toLowerCase();
+  const filas = document.getElementById('tablaPaseLista').getElementsByTagName('tr');
+
+  for (let i = 0; i < filas.length; i++) {
+    // Obtenemos la primera columna de la fila (donde está el nombre)
+    const celdaNombre = filas[i].getElementsByTagName('td')[0];
+    if (celdaNombre) {
+      const texto = celdaNombre.textContent || celdaNombre.innerText;
+      // Si el nombre incluye lo escrito en el buscador, lo muestra, si no, lo oculta
+      if (texto.toLowerCase().indexOf(filtro) > -1) {
+        filas[i].style.display = "";
+      } else {
+        filas[i].style.display = "none";
+      }
+    }
+  }
+}

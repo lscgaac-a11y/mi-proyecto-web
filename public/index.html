@@ -113,24 +113,27 @@
     </div>
 
     <!-- VISTA 4: PASE DE LISTA -->
-    <div id="vista-lista" style="display: none;" class="card">
-      <h2 id="tituloSeccionLista">Pase de Lista - Sección: </h2>
-      <button onclick="cargarPaseDeLista()" class="btn-secondary" style="margin-bottom: 15px;">Recargar Lista</button>
-      
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Localidad</th>
-            <th>Referencia</th>
-            <th>checkin</th>
-          </tr>
-        </thead>
-        <tbody id="tablaPaseLista"></tbody>
-      </table>
-    </div>
-
+<div id="vista-lista" style="display: none;" class="card">
+  <h2 id="tituloSeccionLista">Pase de Lista - Sección: </h2>
+  
+  <!-- BARRA DE BÚSQUEDA Y RECARGA -->
+  <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+    <input type="text" id="buscadorLista" placeholder="🔍 Buscar por nombre..." onkeyup="filtrarLista()" style="flex: 1;">
+    <button onclick="cargarPaseDeLista()" class="btn-secondary">Recargar</button>
   </div>
+  
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Localidad</th>
+        <th>Referencia</th>
+        <th>Check In</th>
+      </tr>
+    </thead>
+    <tbody id="tablaPaseLista"></tbody>
+  </table>
+</div>
 
   <script src="app.js"></script>
 </body>
