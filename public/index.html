@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Aplicación Web</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Panel de Gestión</h1>
+    
+    <!-- Formulario para registrar datos -->
+    <form id="dataForm">
+      <input type="text" id="nombreInput" placeholder="Nombre o Descripción" required>
+      <button type="submit">Guardar Registro</button>
+    </form>
+
+    <!-- Lista donde se mostrarán los datos almacenados -->
+    <h2>Registros guardados</h2>
+    <ul id="listaRegistros"></ul>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
