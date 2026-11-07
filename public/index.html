@@ -3,22 +3,133 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mi Aplicación Web</title>
+  <title>Red de Simpatizantes</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Panel de Gestión</h1>
-    
-    <!-- Formulario para registrar datos -->
-    <form id="dataForm">
-      <input type="text" id="nombreInput" placeholder="Nombre o Descripción" required>
-      <button type="submit">Guardar Registro</button>
-    </form>
 
-    <!-- Lista donde se mostrarán los datos almacenados -->
-    <h2>Registros guardados</h2>
-    <ul id="listaRegistros"></ul>
+  <!-- BARRA DE NAVEGACIÓN (Oculta en login) -->
+  <nav id="navbar" style="display: none;">
+    <div class="nav-content">
+      <h2 id="navTitle">Sistema Electoral</h2>
+      <button onclick="cerrarSesion()" class="btn-secondary">Cerrar Sesión</button>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- VISTA 1: LOGIN -->
+    <div id="vista-login" class="card form-centered">
+      <h2>Iniciar Sesión</h2>
+      <form id="formLogin">
+        <div class="form-group">
+          <label>Usuario:</label>
+          <input type="text" id="loginUsuario" required>
+        </div>
+        <div class="form-group">
+          <label>Contraseña:</label>
+          <input type="password" id="loginPassword" required>
+        </div>
+        <button type="submit" class="btn-primary">Entrar</button>
+      </form>
+      <div id="loginError" class="alert-error" style="display:none; margin-top:10px;"></div>
+    </div>
+
+    <!-- VISTA 2: PANEL DE ADMINISTRADOR -->
+    <div id="vista-admin" style="display: none;">
+      
+      <div class="grid-2">
+        <!-- Formulario para crear usuarios -->
+        <section class="card">
+          <h3>Crear Nuevo Usuario (Staff)</h3>
+          <form id="formCrearUsuario">
+            <div class="form-group">
+              <label>Nombre de Usuario:</label>
+              <input type="text" id="nuevoUsuario" required>
+            </div>
+            <div class="form-group">
+              <label>Contraseña temporal:</label>
+              <input type="text" id="nuevoPassword" required>
+            </div>
+            <div class="form-group">
+              <label>Rol:</label>
+              <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
+                <option value="capturista">Capturista (Registra simpatizantes)</option>
+                <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
+              </select>
+            </div>
+            <div class="form-group" id="divSeccionAdmin" style="display:none;">
+              <label>Asignar Sección Electoral (Solo para Pase de Lista):</label>
+              <input type="text" id="nuevaSeccionAsignada" placeholder="Ej. 0645">
+            </div>
+            <button type="submit" class="btn-primary">Crear Usuario</button>
+          </form>
+        </section>
+
+        <!-- Tabla de avances por sección -->
+        <section class="card">
+          <h3>Avances por Sección Electoral</h3>
+          <button onclick="cargarAvancesAdmin()" class="btn-secondary" style="margin-bottom: 10px;">Actualizar Datos</button>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Sección</th>
+                <th>Registrados</th>
+                <th>Asistieron</th>
+              </tr>
+            </thead>
+            <tbody id="tablaAvances"></tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+
+    <!-- VISTA 3: CAPTURISTA DE SIMPATIZANTES -->
+    <div id="vista-capturista" style="display: none;" class="card form-centered">
+      <h2>Captura de Simpatizante</h2>
+      <form id="formSimpatizante">
+        <div class="form-group">
+          <label>Nombre Completo:</label>
+          <input type="text" id="simpNombre" required>
+        </div>
+        <div class="form-group">
+          <label>Teléfono:</label>
+          <input type="text" id="simpTelefono">
+        </div>
+        <div class="form-group">
+          <label>Sección Electoral:</label>
+          <input type="text" id="simpSeccion" placeholder="Ej. 0645" required>
+        </div>
+        <div class="form-group">
+          <label>Localidad / Colonia:</label>
+          <input type="text" id="simpLocalidad" required>
+        </div>
+        <div class="form-group">
+          <label>Referencia (Quién lo invita / Notas):</label>
+          <textarea id="simpReferencia" rows="2"></textarea>
+        </div>
+        <button type="submit" class="btn-primary">Guardar Simpatizante</button>
+      </form>
+    </div>
+
+    <!-- VISTA 4: PASE DE LISTA -->
+    <div id="vista-lista" style="display: none;" class="card">
+      <h2 id="tituloSeccionLista">Pase de Lista - Sección: </h2>
+      <button onclick="cargarPaseDeLista()" class="btn-secondary" style="margin-bottom: 15px;">Recargar Lista</button>
+      
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Localidad</th>
+            <th>Referencia</th>
+            <th>Asistencia</th>
+          </tr>
+        </thead>
+        <tbody id="tablaPaseLista"></tbody>
+      </table>
+    </div>
+
   </div>
 
   <script src="app.js"></script>
