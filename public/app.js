@@ -139,24 +139,51 @@ async function cargarPaseDeLista() {
   
   tbody.innerHTML = datos.map(simp => `
     <tr>
-      <td><strong>${simp.nombre}</strong><br><small>${simp.telefono}</small></td>
+      <td><strong>${simp.nombre}</strong><br><small>${simp.telefono || ''}</small></td>
       <td>${simp.localidad}</td>
-      <td>${simp.referencia}</td>
+      <td>${simp.referencia || ''}</td>
       <td>
-        <input type="checkbox" style="transform: scale(1.5);" 
-               ${simp.asistio ? 'checked' : ''} 
-               onchange="cambiarAsistencia(${simp.id}, this.checked)">
+        ${simp.asistio 
+          ? `<!-- Si ya asistió: Casilla bloqueada permanentemente -->
+             <div style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+               <input type="checkbox" checked disabled style="transform: scale(1.5);"> 
+               <span>Ya votó</span>
+             </div>`
+          : `<!-- Si NO ha asistido: Casilla + Botón de Guardar -->
+             <div style="display: flex; gap: 12px; align-items: center;">
+               <input type="checkbox" id="check_${simp.id}" style="transform: scale(1.5);">
+               <button class="btn-primary" style="padding: 6px 12px; font-size: 0.85rem; width: auto;" onclick="guardarCheckIn(${simp.id})">Guardar</button>
+             </div>`
+        }
       </td>
     </tr>
   `).join('');
 }
 
-async function cambiarAsistencia(id, asistio) {
-  await fetch(`/api/simpatizantes/${id}/asistencia`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ asistio })
-  });
+// Nueva función para validar, guardar y bloquear
+async function guardarCheckIn(id) {
+  const casilla = document.getElementById(`check_${id}`);
+  
+  // 1. Validar que la casilla esté marcada
+  if (!casilla.checked) {
+    alert("⚠️ Primero marca la casilla antes de presionar Guardar.");
+    return;
+  }
+
+  // 2. Confirmación final de seguridad
+  if (confirm("¿Confirmar Check In? Una vez guardado, YA NO se podrá desmarcar.")) {
+    const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asistio: true }) // Forzamos siempre a TRUE
+    });
+
+    if (res.ok) {
+      cargarPaseDeLista(); // Recarga la lista para aplicar el bloqueo visual
+    } else {
+      alert("Hubo un error al conectar con la base de datos.");
+    }
+  }
 }
 // --- FUNCIÓN DE BÚSQUEDA EN PASE DE LISTA ---
 function filtrarLista() {
