@@ -131,9 +131,16 @@ async function cargarAvancesAdmin() {
     </tr>
   `).join('');
 
-  // 2. Dibujar Gráfica
+  // 2. Llenar automáticamente el filtro de secciones
+  const selectFiltro = document.getElementById('filtroSeccionAdmin');
+  const seccionActual = selectFiltro.value; // Guardar la selección actual
+  selectFiltro.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + 
+    datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
+  if (seccionActual) selectFiltro.value = seccionActual;
+
+  // 3. Dibujar Gráfica
   const ctx = document.getElementById('graficaAvances').getContext('2d');
-  if (chartAvances) chartAvances.destroy(); // Borra la anterior si ya existía para actualizarla
+  if (chartAvances) chartAvances.destroy(); 
 
   chartAvances = new Chart(ctx, {
     type: 'bar',
@@ -143,12 +150,12 @@ async function cargarAvancesAdmin() {
         {
           label: 'Faltan de Votar',
           data: datos.map(d => d.total_registrados - d.total_asistieron),
-          backgroundColor: '#94a3b8' // Gris
+          backgroundColor: '#94a3b8'
         },
         {
           label: 'Ya Votaron',
           data: datos.map(d => d.total_asistieron),
-          backgroundColor: '#16a34a' // Verde
+          backgroundColor: '#16a34a'
         }
       ]
     },
@@ -161,7 +168,7 @@ async function cargarAvancesAdmin() {
     }
   });
 
-  // 3. Cargar la lista global de simpatizantes
+  // 4. Cargar la lista global de simpatizantes
   cargarListaGlobalAdmin();
 }
 
@@ -170,11 +177,13 @@ async function cargarListaGlobalAdmin() {
   const datos = await res.json();
   const tbody = document.getElementById('tablaGlobalAdmin');
   
+  // Agregamos la clase "fila-global" y el atributo "data-seccion" para facilitar el filtro
   tbody.innerHTML = datos.map(simp => `
-    <tr>
+    <tr class="fila-global" data-seccion="${simp.seccion}">
       <td><span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-weight:600;">${simp.seccion}</span></td>
       <td><strong>${simp.nombre}</strong></td>
       <td>${simp.telefono || '---'}</td>
+      <td>${simp.referencia || '---'}</td> <!-- COLUMNA REFERENCIA -->
       <td>
         ${simp.asistio 
           ? `<span style="color: #166534; font-weight: bold;">✅ Ya Votó</span>` 
@@ -182,6 +191,26 @@ async function cargarListaGlobalAdmin() {
       </td>
     </tr>
   `).join('');
+
+  // Ejecutar el filtro por si el admin ya tenía una sección seleccionada al recargar
+  filtrarListaGlobal();
+}
+
+// --- NUEVA FUNCIÓN: FILTRO POR SECCIÓN ---
+function filtrarListaGlobal() {
+  const seccionSeleccionada = document.getElementById('filtroSeccionAdmin').value;
+  const filas = document.getElementsByClassName('fila-global');
+
+  for (let i = 0; i < filas.length; i++) {
+    const seccionFila = filas[i].getAttribute('data-seccion');
+    
+    // Mostrar si seleccionó "TODAS" o si coincide con la sección de la fila
+    if (seccionSeleccionada === "TODAS" || seccionSeleccionada === seccionFila) {
+      filas[i].style.display = "";
+    } else {
+      filas[i].style.display = "none";
+    }
+  }
 }
 
 // --- FUNCIONES CAPTURISTA ---

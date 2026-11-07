@@ -91,23 +91,32 @@
       <canvas id="graficaAvances" height="80"></canvas>
     </section>
 
-    <!-- Lista Global de Votantes -->
-    <section class="card" style="grid-column: 1 / -1;">
-      <h3>Lista General de Simpatizantes (Estatus de Votación)</h3>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Sección</th>
-            <th>Nombre</th>
-            <th>Teléfono</th>
-            <th>Estatus</th>
-          </tr>
-        </thead>
-        <tbody id="tablaGlobalAdmin"></tbody>
-      </table>
-    </section>
+   <!-- Lista Global de Votantes -->
+<section class="card" style="grid-column: 1 / -1;">
+  <h3>Lista General de Simpatizantes (Estatus de Votación)</h3>
+  
+  <!-- NUEVO FILTRO POR SECCIÓN -->
+  <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+    <label style="margin:0; font-weight: 600;">Filtrar por Sección:</label>
+    <select id="filtroSeccionAdmin" onchange="filtrarListaGlobal()" style="padding: 8px; border-radius: 6px; min-width: 150px;">
+      <option value="TODAS">Mostrar Todas</option>
+      <!-- Las opciones se llenarán automáticamente -->
+    </select>
   </div>
-</div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Sección</th>
+        <th>Nombre</th>
+        <th>Teléfono</th>
+        <th>Referencia / Zona</th> <!-- NUEVA COLUMNA -->
+        <th>Estatus</th>
+      </tr>
+    </thead>
+    <tbody id="tablaGlobalAdmin"></tbody>
+  </table>
+</section>
 
         <!-- Tabla de avances por sección -->
         <section class="card">
