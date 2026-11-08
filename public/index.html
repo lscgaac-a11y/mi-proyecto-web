@@ -48,7 +48,7 @@
       <div id="cambioPassError" class="alert-error" style="display:none; margin-top:10px;"></div>
     </div>
 
-    <!-- VISTA 2: PANEL DE ADMINISTRADOR -->
+    <!-- VISTA 2: PANEL DE ADMINISTRADOR / COORDINADOR -->
     <div id="vista-admin" style="display: none;">
       <div class="admin-layout">
         
@@ -63,7 +63,7 @@
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-simp')" class="nav-btn" id="btn-admin-gestion-simp">📝 Editar Simpatizantes</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-staff')" class="nav-btn" id="btn-admin-gestion-staff">⚙️ Editar Staff</button></li>
           </ul>
-          <button onclick="cargarAvancesAdmin()" class="btn-secondary" style="width: 100%; margin-top: 20px;">🔄 Actualizar Datos</button>
+          <button onclick="cargarAvancesAdmin()" id="btn-admin-actualizar" class="btn-secondary" style="width: 100%; margin-top: 20px;">🔄 Actualizar Datos</button>
         </aside>
 
         <!-- CONTENIDO PRINCIPAL -->
@@ -80,6 +80,8 @@
                 <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
                   <option value="capturista">Capturista (Registra simpatizantes)</option>
                   <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
+                  <!-- Nueva opción de Coordinador (se oculta si no es admin) -->
+                  <option value="coordinador" id="optRolCoordinador">Coordinador (Gestiona Staff y BD)</option>
                 </select>
               </div>
               <div class="form-group" id="divSeccionAdmin" style="display:none;"><label>Asignar Sección Electoral:</label><input type="text" id="nuevaSeccionAsignada"></div>
@@ -99,7 +101,7 @@
             <canvas id="graficaAvances" height="120"></canvas>
           </section>
 
-          <!-- 4. Lista General (ACTUALIZADA CON SCROLL, BUSCADOR Y PAGINACIÓN) -->
+          <!-- 4. Lista General -->
           <section id="admin-lista" class="card admin-seccion" style="display: none;">
             <h2>Lista General de Simpatizantes</h2>
             
@@ -111,7 +113,6 @@
               </select>
             </div>
             
-            <!-- Contenedor con Scroll -->
             <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
               <table class="table" style="margin: 0; width: 100%;">
                 <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
@@ -120,12 +121,10 @@
                 <tbody id="tablaGlobalAdmin"></tbody>
               </table>
             </div>
-
-            <!-- Controles de paginación (50 en 50) -->
             <div id="paginacionListaGlobal" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
-          <!-- 5. Edición de Simpatizantes (ACTUALIZADA CON SCROLL, BUSCADOR, FILTRO Y PAGINACIÓN) -->
+          <!-- 5. Edición de Simpatizantes -->
           <section id="admin-gestion-simp" class="card admin-seccion" style="display: none;">
             <h2>Base de Datos Editable: Simpatizantes</h2>
             
@@ -145,11 +144,10 @@
                 <tbody id="tablaGestionSimp"></tbody>
               </table>
             </div>
-
             <div id="paginacionEditSimp" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
-          <!-- 6. Edición de Staff (ACTUALIZADA CON FILTRO Y SCROLL) -->
+          <!-- 6. Edición de Staff -->
           <section id="admin-gestion-staff" class="card admin-seccion" style="display: none;">
             <h2>Base de Datos Editable: Staff</h2>
             
@@ -201,7 +199,7 @@
       </table>
     </div>
 
-  </div> <!-- Fin container -->
+  </div>
 
   <!-- MODAL EDITAR SIMPATIZANTE -->
   <div id="modalEditarSimp" class="modal">

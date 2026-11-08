@@ -59,9 +59,31 @@ function cerrarSesion() {
 
 function redirigirPorRol() {
   document.getElementById('navTitle').innerText = `Panel: ${usuarioActual.rol.toUpperCase()} - ${usuarioActual.usuario}`;
-  if (usuarioActual.rol === 'admin') {
+  
+  // Si es ADMIN o COORDINADOR, comparten el mismo panel pero con permisos distintos
+  if (usuarioActual.rol === 'admin' || usuarioActual.rol === 'coordinador') {
     mostrarVista('vista-admin');
-    cargarAvancesAdmin(); 
+    
+    const esAdmin = usuarioActual.rol === 'admin';
+    
+    // Ocultar pestañas al coordinador
+    document.getElementById('btn-admin-resumen').style.display = esAdmin ? 'block' : 'none';
+    document.getElementById('btn-admin-grafica').style.display = esAdmin ? 'block' : 'none';
+    document.getElementById('btn-admin-lista').style.display = esAdmin ? 'block' : 'none';
+    document.getElementById('btn-admin-actualizar').style.display = esAdmin ? 'block' : 'none';
+    
+    // Ocultar la opción de crear Coordinadores si no es el Admin Maestro
+    const optCoordinador = document.getElementById('optRolCoordinador');
+    if (optCoordinador) optCoordinador.style.display = esAdmin ? 'block' : 'none';
+    
+    // Evitar que un coordinador asigne rol coordinador por accidente si estaba seleccionado
+    if (!esAdmin && document.getElementById('nuevoRol').value === 'coordinador') {
+      document.getElementById('nuevoRol').value = 'capturista';
+    }
+
+    mostrarSeccionAdmin('admin-staff'); 
+    if (esAdmin) cargarAvancesAdmin();
+    
   } else if (usuarioActual.rol === 'capturista') {
     mostrarVista('vista-capturista');
   } else if (usuarioActual.rol === 'pase_lista') {
@@ -132,7 +154,7 @@ document.getElementById('formCambioPassword').addEventListener('submit', async (
 });
 
 // ==========================================
-// 3. NAVEGACIÓN DEL PANEL ADMINISTRADOR
+// 3. NAVEGACIÓN DEL PANEL ADMINISTRADOR/COOR.
 // ==========================================
 function mostrarSeccionAdmin(seccionId) {
   const secciones = document.getElementsByClassName('admin-seccion');
@@ -144,6 +166,7 @@ function mostrarSeccionAdmin(seccionId) {
   document.getElementById(seccionId).style.display = 'block';
   document.getElementById('btn-' + seccionId).classList.add('active');
 
+  // Si abren estas pestañas, descargamos los datos frescos de la BD
   if (seccionId === 'admin-lista') cargarListaGlobalAdmin();
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
@@ -187,7 +210,6 @@ async function cargarAvancesAdmin() {
       <tr><td><strong>${d.seccion}</strong></td><td>${d.total_registrados}</td><td>${d.total_asistieron}</td></tr>
     `).join('');
 
-    // Actualizar todos los selectores de sección (Filtros)
     const opcionesSecciones = '<option value="TODAS">Mostrar Todas</option>' + datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
     ['filtroSeccionAdmin', 'filtroSeccionEditSimp'].forEach(id => {
       const sel = document.getElementById(id);
@@ -260,7 +282,7 @@ function cambiarPaginaLista(delta) {
 }
 
 // ==========================================
-// 6. EDICIÓN DE BASES DE DATOS (Paginadas/Filtros)
+// 6. EDICIÓN DE BASES DE DATOS
 // ==========================================
 
 // --- STAFF ---
@@ -268,7 +290,6 @@ async function cargarGestionStaff() {
   const res = await fetch('/api/usuarios');
   globalStaffEdit = await res.json();
   
-  // Extraer las secciones únicas del staff para crear su filtro
   const seccionesStaff = [...new Set(globalStaffEdit.map(u => u.seccion_asignada).filter(s => s))].sort();
   const select = document.getElementById('filtroSeccionEditStaff');
   const valActual = select.value;
@@ -375,14 +396,14 @@ document.getElementById('formEditarSimp').addEventListener('submit', async (e) =
   });
   document.getElementById('modalEditarSimp').style.display = 'none';
   cargarGestionSimpatizantes();
-  cargarAvancesAdmin(); 
+  if (usuarioActual.rol === 'admin') cargarAvancesAdmin(); 
 });
 
 async function eliminarSimpatizante(id) {
   if(confirm('¿Eliminar permanentemente a este simpatizante?')) {
     await fetch(`/api/simpatizantes/${id}`, { method: 'DELETE' });
     cargarGestionSimpatizantes();
-    cargarAvancesAdmin(); 
+    if (usuarioActual.rol === 'admin') cargarAvancesAdmin(); 
   }
 }
 
