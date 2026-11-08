@@ -3,6 +3,24 @@ let chartAvances = null;
 let globalSimpatizantesEdit = [];
 
 // ==========================================
+// NUEVO: MANTENER SESIÓN AL RECARGAR PÁGINA
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  const sesionGuardada = localStorage.getItem('sesionUsuario');
+  if (sesionGuardada) {
+    usuarioActual = JSON.parse(sesionGuardada);
+    // Si recargó estando en cambio de contraseña obligatorio
+    if (usuarioActual.requiere_cambio) {
+      mostrarVista('vista-cambio-password');
+    } else {
+      redirigirPorRol();
+    }
+  } else {
+    mostrarVista('vista-login');
+  }
+});
+
+// ==========================================
 // 1. CONTROL DE VISTAS Y RUTAS
 // ==========================================
 function mostrarVista(vistaId) {
@@ -23,6 +41,7 @@ function mostrarVista(vistaId) {
 
 function cerrarSesion() {
   usuarioActual = null;
+  localStorage.removeItem('sesionUsuario'); // Borrar memoria al salir
   document.getElementById('formLogin').reset();
   mostrarVista('vista-login');
 }
@@ -32,7 +51,7 @@ function redirigirPorRol() {
   
   if (usuarioActual.rol === 'admin') {
     mostrarVista('vista-admin');
-    cargarAvancesAdmin(); // Carga las gráficas al iniciar
+    cargarAvancesAdmin(); 
   } else if (usuarioActual.rol === 'capturista') {
     mostrarVista('vista-capturista');
   } else if (usuarioActual.rol === 'pase_lista') {
@@ -61,6 +80,8 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
 
   if (res.ok) {
     usuarioActual = await res.json();
+    localStorage.setItem('sesionUsuario', JSON.stringify(usuarioActual)); // Guardar en memoria
+    
     if (usuarioActual.requiere_cambio) {
       mostrarVista('vista-cambio-password');
       return;
@@ -93,6 +114,7 @@ document.getElementById('formCambioPassword').addEventListener('submit', async (
 
   if (res.ok) {
     usuarioActual.requiere_cambio = false;
+    localStorage.setItem('sesionUsuario', JSON.stringify(usuarioActual)); // Actualizar memoria sin candado
     document.getElementById('formCambioPassword').reset();
     redirigirPorRol(); 
   } else {
@@ -118,7 +140,6 @@ function mostrarSeccionAdmin(seccionId) {
   document.getElementById(seccionId).style.display = 'block';
   document.getElementById('btn-' + seccionId).classList.add('active');
 
-  // Si abren las bases de datos editables, las cargamos en ese momento
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
 }
@@ -229,8 +250,6 @@ function filtrarListaGlobal() {
 // 5. EDICIÓN DE BASES DE DATOS (ADMIN)
 // ==========================================
 
-// --- Editar Staff ---
-// --- Editar Staff ---
 async function cargarGestionStaff() {
   const res = await fetch('/api/usuarios');
   const datos = await res.json();
@@ -253,7 +272,6 @@ async function eliminarStaff(id) {
   }
 }
 
-// --- Editar Simpatizantes ---
 async function cargarGestionSimpatizantes() {
   const res = await fetch('/api/simpatizantes-todos');
   globalSimpatizantesEdit = await res.json();
@@ -333,77 +351,4 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
 
   if (res.ok) {
     alert('Simpatizante guardado correctamente');
-    document.getElementById('formSimpatizante').reset();
-  } else {
-    alert('Error al guardar simpatizante');
-  }
-});
-
-// ==========================================
-// 7. FUNCIONES PASE DE LISTA
-// ==========================================
-async function cargarPaseDeLista() {
-  const res = await fetch(`/api/simpatizantes/${usuarioActual.seccion_asignada}`);
-  const datos = await res.json();
-  const tbody = document.getElementById('tablaPaseLista');
-  
-  tbody.innerHTML = datos.map(simp => `
-    <tr>
-      <td><strong>${simp.nombre}</strong><br><small>${simp.telefono || ''}</small></td>
-      <td>${simp.localidad}</td>
-      <td>${simp.referencia || ''}</td>
-      <td>
-        ${simp.asistio 
-          ? `<div style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-               <input type="checkbox" checked disabled style="transform: scale(1.5);"> 
-               <span>Ya votó</span>
-             </div>`
-          : `<div style="display: flex; gap: 12px; align-items: center;">
-               <input type="checkbox" id="check_${simp.id}" style="transform: scale(1.5);">
-               <button class="btn-primary" style="padding: 6px 12px; font-size: 0.85rem; width: auto;" onclick="guardarCheckIn(${simp.id})">Guardar</button>
-             </div>`
-        }
-      </td>
-    </tr>
-  `).join('');
-}
-
-async function guardarCheckIn(id) {
-  const casilla = document.getElementById(`check_${id}`);
-  
-  if (!casilla.checked) {
-    alert("⚠️ Primero marca la casilla antes de presionar Guardar.");
-    return;
-  }
-
-  if (confirm("¿Confirmar Check In? Una vez guardado, YA NO se podrá desmarcar.")) {
-    const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asistio: true })
-    });
-
-    if (res.ok) {
-      cargarPaseDeLista();
-    } else {
-      alert("Hubo un error al conectar con la base de datos.");
-    }
-  }
-}
-
-function filtrarLista() {
-  const filtro = document.getElementById('buscadorLista').value.toLowerCase();
-  const filas = document.getElementById('tablaPaseLista').getElementsByTagName('tr');
-
-  for (let i = 0; i < filas.length; i++) {
-    const celdaNombre = filas[i].getElementsByTagName('td')[0];
-    if (celdaNombre) {
-      const texto = celdaNombre.textContent || celdaNombre.innerText;
-      if (texto.toLowerCase().indexOf(filtro) > -1) {
-        filas[i].style.display = "";
-      } else {
-        filas[i].style.display = "none";
-      }
-    }
-  }
-}
+    document.getElementById
