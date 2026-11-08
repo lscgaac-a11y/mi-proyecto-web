@@ -351,4 +351,77 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
 
   if (res.ok) {
     alert('Simpatizante guardado correctamente');
-    document.getElementById
+    document.getElementById('formSimpatizante').reset();
+  } else {
+    alert('Error al guardar simpatizante');
+  }
+});
+
+// ==========================================
+// 7. FUNCIONES PASE DE LISTA
+// ==========================================
+async function cargarPaseDeLista() {
+  const res = await fetch(`/api/simpatizantes/${usuarioActual.seccion_asignada}`);
+  const datos = await res.json();
+  const tbody = document.getElementById('tablaPaseLista');
+  
+  tbody.innerHTML = datos.map(simp => `
+    <tr>
+      <td><strong>${simp.nombre}</strong><br><small>${simp.telefono || ''}</small></td>
+      <td>${simp.localidad}</td>
+      <td>${simp.referencia || ''}</td>
+      <td>
+        ${simp.asistio 
+          ? `<div style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+               <input type="checkbox" checked disabled style="transform: scale(1.5);"> 
+               <span>Ya votó</span>
+             </div>`
+          : `<div style="display: flex; gap: 12px; align-items: center;">
+               <input type="checkbox" id="check_${simp.id}" style="transform: scale(1.5);">
+               <button class="btn-primary" style="padding: 6px 12px; font-size: 0.85rem; width: auto;" onclick="guardarCheckIn(${simp.id})">Guardar</button>
+             </div>`
+        }
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function guardarCheckIn(id) {
+  const casilla = document.getElementById(`check_${id}`);
+  
+  if (!casilla.checked) {
+    alert("⚠️ Primero marca la casilla antes de presionar Guardar.");
+    return;
+  }
+
+  if (confirm("¿Confirmar Check In? Una vez guardado, YA NO se podrá desmarcar.")) {
+    const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asistio: true })
+    });
+
+    if (res.ok) {
+      cargarPaseDeLista();
+    } else {
+      alert("Hubo un error al conectar con la base de datos.");
+    }
+  }
+}
+
+function filtrarLista() {
+  const filtro = document.getElementById('buscadorLista').value.toLowerCase();
+  const filas = document.getElementById('tablaPaseLista').getElementsByTagName('tr');
+
+  for (let i = 0; i < filas.length; i++) {
+    const celdaNombre = filas[i].getElementsByTagName('td')[0];
+    if (celdaNombre) {
+      const texto = celdaNombre.textContent || celdaNombre.innerText;
+      if (texto.toLowerCase().indexOf(filtro) > -1) {
+        filas[i].style.display = "";
+      } else {
+        filas[i].style.display = "none";
+      }
+    }
+  }
+}
