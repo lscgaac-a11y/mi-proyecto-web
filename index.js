@@ -160,6 +160,40 @@ app.patch('/api/usuarios/:id/password', async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar contraseña' });
   }
 });
+// 9. Gestionar Staff (Ver y Eliminar)
+app.get('/api/usuarios', async (req, res) => {
+  try {
+    const resultado = await pool.query("SELECT id, usuario, rol, seccion_asignada FROM usuarios WHERE rol != 'admin' ORDER BY id ASC");
+    res.json(resultado.rows);
+  } catch (error) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.delete('/api/usuarios/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM usuarios WHERE id = $1', [req.params.id]);
+    res.json({ mensaje: 'Eliminado' });
+  } catch (error) { res.status(500).json({ error: 'Error' }); }
+});
+
+// 10. Gestionar Simpatizantes (Actualizar y Eliminar)
+app.patch('/api/simpatizantes/:id/editar', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, telefono, seccion, localidad, referencia } = req.body;
+  try {
+    await pool.query(
+      'UPDATE simpatizantes SET nombre=$1, telefono=$2, seccion=$3, localidad=$4, referencia=$5 WHERE id=$6',
+      [nombre, telefono, seccion, localidad, referencia, id]
+    );
+    res.json({ mensaje: 'Actualizado' });
+  } catch (error) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.delete('/api/simpatizantes/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM simpatizantes WHERE id = $1', [req.params.id]);
+    res.json({ mensaje: 'Eliminado' });
+  } catch (error) { res.status(500).json({ error: 'Error' }); }
+});
 app.listen(PORT, () => {
   console.log(`Servidor activo en puerto ${PORT}`);
 });
