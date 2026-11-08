@@ -41,100 +41,98 @@
    <!-- VISTA 2: PANEL DE ADMINISTRADOR -->
 <div id="vista-admin" style="display: none;">
   
-  <div class="grid-2">
-    <!-- Formulario para crear usuarios -->
-    <section class="card">
-      <h3>Crear Nuevo Usuario (Staff)</h3>
-      <form id="formCrearUsuario">
-        <div class="form-group">
-          <label>Nombre de Usuario:</label>
-          <input type="text" id="nuevoUsuario" required>
-        </div>
-        <div class="form-group">
-          <label>Contraseña temporal:</label>
-          <input type="text" id="nuevoPassword" required>
-        </div>
-        <div class="form-group">
-          <label>Rol:</label>
-          <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
-            <option value="capturista">Capturista (Registra simpatizantes)</option>
-            <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
+  <div class="admin-layout">
+    <!-- BARRA LATERAL (SIDEBAR) -->
+    <aside class="sidebar">
+      <h3>Menú Principal</h3>
+      <ul class="sidebar-nav">
+        <li><button onclick="mostrarSeccionAdmin('admin-staff')" class="nav-btn active" id="btn-admin-staff">👥 Captura de Staff</button></li>
+        <li><button onclick="mostrarSeccionAdmin('admin-resumen')" class="nav-btn" id="btn-admin-resumen">📊 Resumen Numérico</button></li>
+        <li><button onclick="mostrarSeccionAdmin('admin-grafica')" class="nav-btn" id="btn-admin-grafica">📉 Gráfica</button></li>
+        <li><button onclick="mostrarSeccionAdmin('admin-lista')" class="nav-btn" id="btn-admin-lista">📋 Lista General</button></li>
+      </ul>
+      <button onclick="cargarAvancesAdmin()" class="btn-secondary" style="width: 100%; margin-top: 20px;">🔄 Actualizar Datos</button>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="admin-content">
+      
+      <!-- 1. Captura de Staff -->
+      <section id="admin-staff" class="card admin-seccion">
+        <h2>Crear Nuevo Usuario (Staff)</h2>
+        <form id="formCrearUsuario">
+          <div class="form-group">
+            <label>Nombre de Usuario:</label>
+            <input type="text" id="nuevoUsuario" required>
+          </div>
+          <div class="form-group">
+            <label>Contraseña temporal:</label>
+            <input type="text" id="nuevoPassword" required>
+          </div>
+          <div class="form-group">
+            <label>Rol:</label>
+            <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
+              <option value="capturista">Capturista (Registra simpatizantes)</option>
+              <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
+            </select>
+          </div>
+          <div class="form-group" id="divSeccionAdmin" style="display:none;">
+            <label>Asignar Sección Electoral (Solo para Pase de Lista):</label>
+            <input type="text" id="nuevaSeccionAsignada" placeholder="Ej. 0645">
+          </div>
+          <button type="submit" class="btn-primary">Crear Usuario</button>
+        </form>
+      </section>
+
+      <!-- 2. Resumen Numérico -->
+      <section id="admin-resumen" class="card admin-seccion" style="display: none;">
+        <h2>Resumen Numérico</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Sección</th>
+              <th>Padrón</th>
+              <th>Ya Votaron</th>
+            </tr>
+          </thead>
+          <tbody id="tablaAvances"></tbody>
+        </table>
+      </section>
+
+      <!-- 3. Gráfica -->
+      <section id="admin-grafica" class="card admin-seccion" style="display: none;">
+        <h2>Gráfica de Avance por Sección</h2>
+        <canvas id="graficaAvances" height="120"></canvas>
+      </section>
+
+      <!-- 4. Lista General -->
+      <section id="admin-lista" class="card admin-seccion" style="display: none;">
+        <h2>Lista General de Simpatizantes</h2>
+        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+          <label style="margin:0; font-weight: 600;">Filtrar por Sección:</label>
+          <select id="filtroSeccionAdmin" onchange="filtrarListaGlobal()" style="padding: 8px; border-radius: 6px; min-width: 150px;">
+            <option value="TODAS">Mostrar Todas</option>
           </select>
         </div>
-        <div class="form-group" id="divSeccionAdmin" style="display:none;">
-          <label>Asignar Sección Electoral (Solo para Pase de Lista):</label>
-          <input type="text" id="nuevaSeccionAsignada" placeholder="Ej. 0645">
-        </div>
-        <button type="submit" class="btn-primary">Crear Usuario</button>
-      </form>
-    </section>
-
-    <!-- Tabla resumen -->
-    <section class="card">
-      <h3>Resumen Numérico</h3>
-      <button onclick="cargarAvancesAdmin()" class="btn-secondary" style="margin-bottom: 10px;">Actualizar Datos</button>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Sección</th>
-            <th>Padrón</th>
-            <th>Ya Votaron</th>
-          </tr>
-        </thead>
-        <tbody id="tablaAvances"></tbody>
-      </table>
-    </section>
-
-    <!-- Gráfica Visual -->
-    <section class="card" style="grid-column: 1 / -1;">
-      <h3>Gráfica de Avance por Sección Electoral</h3>
-      <canvas id="graficaAvances" height="80"></canvas>
-    </section>
-
-   <!-- Lista Global de Votantes -->
-<section class="card" style="grid-column: 1 / -1;">
-  <h3>Lista General de Simpatizantes (Estatus de Votación)</h3>
-  
-  <!-- NUEVO FILTRO POR SECCIÓN -->
-  <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-    <label style="margin:0; font-weight: 600;">Filtrar por Sección:</label>
-    <select id="filtroSeccionAdmin" onchange="filtrarListaGlobal()" style="padding: 8px; border-radius: 6px; min-width: 150px;">
-      <option value="TODAS">Mostrar Todas</option>
-      <!-- Las opciones se llenarán automáticamente -->
-    </select>
-  </div>
-
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Sección</th>
-        <th>Nombre</th>
-        <th>Teléfono</th>
-        <th>Referencia / Zona</th> <!-- NUEVA COLUMNA -->
-        <th>Estatus</th>
-      </tr>
-    </thead>
-    <tbody id="tablaGlobalAdmin"></tbody>
-  </table>
-</section>
-
-        <!-- Tabla de avances por sección -->
-        <section class="card">
-          <h3>Avances por Sección Electoral</h3>
-          <button onclick="cargarAvancesAdmin()" class="btn-secondary" style="margin-bottom: 10px;">Actualizar Datos</button>
+        <div style="overflow-x: auto;">
           <table class="table">
             <thead>
               <tr>
                 <th>Sección</th>
-                <th>Registrados</th>
-                <th>Asistieron</th>
+                <th>Nombre</th>
+                <th>Teléfono</th>
+                <th>Referencia / Zona</th>
+                <th>Estatus</th>
               </tr>
             </thead>
-            <tbody id="tablaAvances"></tbody>
+            <tbody id="tablaGlobalAdmin"></tbody>
           </table>
-        </section>
-      </div>
-    </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
 
     <!-- VISTA 3: CAPTURISTA DE SIMPATIZANTES -->
 <div id="vista-capturista" style="display: none;" class="card form-centered">

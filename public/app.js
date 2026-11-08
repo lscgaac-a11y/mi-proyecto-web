@@ -317,3 +317,21 @@ function filtrarLista() {
     }
   }
 }
+// --- FUNCIÓN PARA NAVEGAR EN LA BARRA LATERAL DEL ADMIN ---
+function mostrarSeccionAdmin(seccionId) {
+  // 1. Ocultar todos los bloques de contenido
+  const secciones = document.getElementsByClassName('admin-seccion');
+  for (let i = 0; i < secciones.length; i++) {
+    secciones[i].style.display = 'none';
+  }
+  
+  // 2. Quitar el color azul (activo) de todos los botones
+  const botones = document.getElementsByClassName('nav-btn');
+  for (let i = 0; i < botones.length; i++) {
+    botones[i].classList.remove('active');
+  }
+  
+  // 3. Mostrar el bloque seleccionado y pintar su botón de azul
+  document.getElementById(seccionId).style.display = 'block';
+  document.getElementById('btn-' + seccionId).classList.add('active');
+}
