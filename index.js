@@ -27,6 +27,11 @@ async function iniciarBaseDeDatos() {
       );
     `);
     
+    // Agregar columna de cambio de password a tablas existentes (ignora el error si ya existe)
+    try {
+      await pool.query("ALTER TABLE usuarios ADD COLUMN requiere_cambio BOOLEAN DEFAULT TRUE;");
+    } catch (e) { /* Columna ya existe */ }
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS simpatizantes (
         id SERIAL PRIMARY KEY,
@@ -40,29 +45,27 @@ async function iniciarBaseDeDatos() {
       );
     `);
 
-    // Crear admin por defecto si no existe
+    // Crear admin por defecto si no existe (al admin no le pedimos cambiarla por ahora)
     const adminCheck = await pool.query("SELECT * FROM usuarios WHERE rol = 'admin'");
     if (adminCheck.rows.length === 0) {
       await pool.query(
-        "INSERT INTO usuarios (usuario, password, rol) VALUES ($1, $2, $3)",
-        ['admin', 'admin123', 'admin']
+        "INSERT INTO usuarios (usuario, password, rol, requiere_cambio) VALUES ($1, $2, $3, $4)",
+        ['admin', 'admin123', 'admin', false]
       );
-      console.log('✅ Creado usuario administrador por defecto (admin / admin123)');
     }
-    console.log('✅ Base de datos de simpatizantes lista.');
+    console.log('✅ Base de datos lista.');
   } catch (error) {
     console.error('❌ Error al inicializar tablas:', error.message);
   }
 }
 iniciarBaseDeDatos();
-
 // --- RUTAS DE LA API ---
 
 // 1. Login
 app.post('/api/login', async (req, res) => {
   const { usuario, password } = req.body;
   try {
-    const user = await pool.query('SELECT id, usuario, rol, seccion_asignada FROM usuarios WHERE usuario = $1 AND password = $2', [usuario, password]);
+    const user = await pool.query('SELECT id, usuario, rol, seccion_asignada, requiere_cambio FROM usuarios WHERE usuario = $1 AND password = $2', [usuario, password]);
     if (user.rows.length === 0) return res.status(401).json({ error: 'Credenciales incorrectas' });
     res.json(user.rows[0]);
   } catch (error) {
@@ -146,7 +149,17 @@ app.get('/api/simpatizantes-todos', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener lista global' });
   }
 });
-
+// 8. Actualizar contraseña (Primera entrada)
+app.patch('/api/usuarios/:id/password', async (req, res) => {
+  const { id } = req.params;
+  const { nuevoPassword } = req.body;
+  try {
+    await pool.query('UPDATE usuarios SET password = $1, requiere_cambio = FALSE WHERE id = $2', [nuevoPassword, id]);
+    res.json({ mensaje: 'Contraseña actualizada con éxito' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar contraseña' });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Servidor activo en puerto ${PORT}`);
 });

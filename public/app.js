@@ -3,11 +3,13 @@ let usuarioActual = null;
 // --- CONTROL DE VISTAS ---
 function mostrarVista(vistaId) {
   document.getElementById('vista-login').style.display = 'none';
+  document.getElementById('vista-cambio-password').style.display = 'none';
   document.getElementById('vista-admin').style.display = 'none';
   document.getElementById('vista-capturista').style.display = 'none';
   document.getElementById('vista-lista').style.display = 'none';
   
-  if (vistaId !== 'vista-login') {
+  // Mostrar la barra de navegación solo si no es Login o Cambio de Pass
+  if (vistaId !== 'vista-login' && vistaId !== 'vista-cambio-password') {
     document.getElementById('navbar').style.display = 'block';
   } else {
     document.getElementById('navbar').style.display = 'none';
@@ -20,6 +22,22 @@ function cerrarSesion() {
   usuarioActual = null;
   document.getElementById('formLogin').reset();
   mostrarVista('vista-login');
+}
+
+// --- FUNCIÓN REDIRIGIR POR ROL ---
+function redirigirPorRol() {
+  document.getElementById('navTitle').innerText = `Panel: ${usuarioActual.rol.toUpperCase()} - ${usuarioActual.usuario}`;
+  
+  if (usuarioActual.rol === 'admin') {
+    mostrarVista('vista-admin');
+    cargarAvancesAdmin();
+  } else if (usuarioActual.rol === 'capturista') {
+    mostrarVista('vista-capturista');
+  } else if (usuarioActual.rol === 'pase_lista') {
+    mostrarVista('vista-lista');
+    document.getElementById('tituloSeccionLista').innerText = `Pase de Lista - Sección: ${usuarioActual.seccion_asignada}`;
+    cargarPaseDeLista();
+  }
 }
 
 // --- LOGIN ---
@@ -39,50 +57,47 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
 
   if (res.ok) {
     usuarioActual = await res.json();
-    document.getElementById('navTitle').innerText = `Panel: ${usuarioActual.rol.toUpperCase()} - ${usuarioActual.usuario}`;
     
-    // Redirigir según el rol
-    if (usuarioActual.rol === 'admin') {
-      mostrarVista('vista-admin');
-      cargarAvancesAdmin();
-    } else if (usuarioActual.rol === 'capturista') {
-      mostrarVista('vista-capturista');
-    } else if (usuarioActual.rol === 'pase_lista') {
-      mostrarVista('vista-lista');
-      document.getElementById('tituloSeccionLista').innerText = `Pase de Lista - Sección: ${usuarioActual.seccion_asignada}`;
-      cargarPaseDeLista();
+    // Candado: Si es la primera vez, mandarlo a cambiar contraseña
+    if (usuarioActual.requiere_cambio) {
+      mostrarVista('vista-cambio-password');
+      return;
     }
+    
+    redirigirPorRol();
   } else {
     errorDiv.innerText = 'Usuario o contraseña incorrectos';
     errorDiv.style.display = 'block';
   }
 });
 
-// --- FUNCIONES ADMINISTRADOR ---
-function toggleSeccionAdmin() {
-  const rol = document.getElementById('nuevoRol').value;
-  document.getElementById('divSeccionAdmin').style.display = (rol === 'pase_lista') ? 'block' : 'none';
-}
-
-document.getElementById('formCrearUsuario').addEventListener('submit', async (e) => {
+// --- CAMBIO DE CONTRASEÑA OBLIGATORIO ---
+document.getElementById('formCambioPassword').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const res = await fetch('/api/usuarios', {
-    method: 'POST',
+  const p1 = document.getElementById('passNueva1').value;
+  const p2 = document.getElementById('passNueva2').value;
+  const errorDiv = document.getElementById('cambioPassError');
+  errorDiv.style.display = 'none';
+
+  if (p1 !== p2) {
+    errorDiv.innerText = 'Las contraseñas no coinciden.';
+    errorDiv.style.display = 'block';
+    return;
+  }
+
+  const res = await fetch(`/api/usuarios/${usuarioActual.id}/password`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      usuario: document.getElementById('nuevoUsuario').value,
-      password: document.getElementById('nuevoPassword').value,
-      rol: document.getElementById('nuevoRol').value,
-      seccion_asignada: document.getElementById('nuevaSeccionAsignada').value
-    })
+    body: JSON.stringify({ nuevoPassword: p1 })
   });
 
   if (res.ok) {
-    alert('Usuario creado con éxito');
-    document.getElementById('formCrearUsuario').reset();
-    toggleSeccionAdmin();
+    usuarioActual.requiere_cambio = false; // Quitar el candado en memoria
+    document.getElementById('formCambioPassword').reset();
+    redirigirPorRol(); // Ahora sí, lo dejamos entrar a su panel
   } else {
-    alert('Error al crear usuario. Verifica que el nombre no exista ya.');
+    errorDiv.innerText = 'Error al guardar la contraseña.';
+    errorDiv.style.display = 'block';
   }
 });
 
@@ -95,7 +110,6 @@ function toggleSeccionAdmin() {
 }
 
 document.getElementById('formCrearUsuario').addEventListener('submit', async (e) => {
-  // ... (mantén el código del formCrearUsuario igual)
   e.preventDefault();
   const res = await fetch('/api/usuarios', {
     method: 'POST',
@@ -133,7 +147,7 @@ async function cargarAvancesAdmin() {
 
   // 2. Llenar automáticamente el filtro de secciones
   const selectFiltro = document.getElementById('filtroSeccionAdmin');
-  const seccionActual = selectFiltro.value; // Guardar la selección actual
+  const seccionActual = selectFiltro.value; 
   selectFiltro.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + 
     datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
   if (seccionActual) selectFiltro.value = seccionActual;
@@ -168,7 +182,7 @@ async function cargarAvancesAdmin() {
     }
   });
 
-  // 4. Cargar la lista global de simpatizantes
+  // 4. Cargar la lista global
   cargarListaGlobalAdmin();
 }
 
@@ -177,13 +191,12 @@ async function cargarListaGlobalAdmin() {
   const datos = await res.json();
   const tbody = document.getElementById('tablaGlobalAdmin');
   
-  // Agregamos la clase "fila-global" y el atributo "data-seccion" para facilitar el filtro
   tbody.innerHTML = datos.map(simp => `
     <tr class="fila-global" data-seccion="${simp.seccion}">
       <td><span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-weight:600;">${simp.seccion}</span></td>
       <td><strong>${simp.nombre}</strong></td>
       <td>${simp.telefono || '---'}</td>
-      <td>${simp.referencia || '---'}</td> <!-- COLUMNA REFERENCIA -->
+      <td>${simp.referencia || '---'}</td>
       <td>
         ${simp.asistio 
           ? `<span style="color: #166534; font-weight: bold;">✅ Ya Votó</span>` 
@@ -192,19 +205,15 @@ async function cargarListaGlobalAdmin() {
     </tr>
   `).join('');
 
-  // Ejecutar el filtro por si el admin ya tenía una sección seleccionada al recargar
   filtrarListaGlobal();
 }
 
-// --- NUEVA FUNCIÓN: FILTRO POR SECCIÓN ---
 function filtrarListaGlobal() {
   const seccionSeleccionada = document.getElementById('filtroSeccionAdmin').value;
   const filas = document.getElementsByClassName('fila-global');
 
   for (let i = 0; i < filas.length; i++) {
     const seccionFila = filas[i].getAttribute('data-seccion');
-    
-    // Mostrar si seleccionó "TODAS" o si coincide con la sección de la fila
     if (seccionSeleccionada === "TODAS" || seccionSeleccionada === seccionFila) {
       filas[i].style.display = "";
     } else {
@@ -213,15 +222,29 @@ function filtrarListaGlobal() {
   }
 }
 
+// --- FUNCIÓN PARA NAVEGAR EN LA BARRA LATERAL DEL ADMIN ---
+function mostrarSeccionAdmin(seccionId) {
+  const secciones = document.getElementsByClassName('admin-seccion');
+  for (let i = 0; i < secciones.length; i++) {
+    secciones[i].style.display = 'none';
+  }
+  
+  const botones = document.getElementsByClassName('nav-btn');
+  for (let i = 0; i < botones.length; i++) {
+    botones[i].classList.remove('active');
+  }
+  
+  document.getElementById(seccionId).style.display = 'block';
+  document.getElementById('btn-' + seccionId).classList.add('active');
+}
+
+
 // --- FUNCIONES CAPTURISTA ---
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  // Extraer, limpiar y convertir a MAYÚSCULAS para formato de Lista Nominal
   const apellidos = document.getElementById('simpApellidos').value.trim().toUpperCase();
   const nombres = document.getElementById('simpNombres').value.trim().toUpperCase();
-  
-  // Unimos el texto: "APELLIDOS, NOMBRES"
   const nombreFormatoLista = `${apellidos}, ${nombres}`;
 
   const res = await fetch('/api/simpatizantes', {
@@ -244,6 +267,7 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
   }
 });
 
+
 // --- FUNCIONES PASE DE LISTA ---
 async function cargarPaseDeLista() {
   const res = await fetch(`/api/simpatizantes/${usuarioActual.seccion_asignada}`);
@@ -257,13 +281,11 @@ async function cargarPaseDeLista() {
       <td>${simp.referencia || ''}</td>
       <td>
         ${simp.asistio 
-          ? `<!-- Si ya asistió: Casilla bloqueada permanentemente -->
-             <div style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+          ? `<div style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                <input type="checkbox" checked disabled style="transform: scale(1.5);"> 
                <span>Ya votó</span>
              </div>`
-          : `<!-- Si NO ha asistido: Casilla + Botón de Guardar -->
-             <div style="display: flex; gap: 12px; align-items: center;">
+          : `<div style="display: flex; gap: 12px; align-items: center;">
                <input type="checkbox" id="check_${simp.id}" style="transform: scale(1.5);">
                <button class="btn-primary" style="padding: 6px 12px; font-size: 0.85rem; width: auto;" onclick="guardarCheckIn(${simp.id})">Guardar</button>
              </div>`
@@ -273,42 +295,38 @@ async function cargarPaseDeLista() {
   `).join('');
 }
 
-// Nueva función para validar, guardar y bloquear
 async function guardarCheckIn(id) {
   const casilla = document.getElementById(`check_${id}`);
   
-  // 1. Validar que la casilla esté marcada
   if (!casilla.checked) {
     alert("⚠️ Primero marca la casilla antes de presionar Guardar.");
     return;
   }
 
-  // 2. Confirmación final de seguridad
   if (confirm("¿Confirmar Check In? Una vez guardado, YA NO se podrá desmarcar.")) {
     const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asistio: true }) // Forzamos siempre a TRUE
+      body: JSON.stringify({ asistio: true })
     });
 
     if (res.ok) {
-      cargarPaseDeLista(); // Recarga la lista para aplicar el bloqueo visual
+      cargarPaseDeLista();
     } else {
       alert("Hubo un error al conectar con la base de datos.");
     }
   }
 }
+
 // --- FUNCIÓN DE BÚSQUEDA EN PASE DE LISTA ---
 function filtrarLista() {
   const filtro = document.getElementById('buscadorLista').value.toLowerCase();
   const filas = document.getElementById('tablaPaseLista').getElementsByTagName('tr');
 
   for (let i = 0; i < filas.length; i++) {
-    // Obtenemos la primera columna de la fila (donde está el nombre)
     const celdaNombre = filas[i].getElementsByTagName('td')[0];
     if (celdaNombre) {
       const texto = celdaNombre.textContent || celdaNombre.innerText;
-      // Si el nombre incluye lo escrito en el buscador, lo muestra, si no, lo oculta
       if (texto.toLowerCase().indexOf(filtro) > -1) {
         filas[i].style.display = "";
       } else {
@@ -316,22 +334,4 @@ function filtrarLista() {
       }
     }
   }
-}
-// --- FUNCIÓN PARA NAVEGAR EN LA BARRA LATERAL DEL ADMIN ---
-function mostrarSeccionAdmin(seccionId) {
-  // 1. Ocultar todos los bloques de contenido
-  const secciones = document.getElementsByClassName('admin-seccion');
-  for (let i = 0; i < secciones.length; i++) {
-    secciones[i].style.display = 'none';
-  }
-  
-  // 2. Quitar el color azul (activo) de todos los botones
-  const botones = document.getElementsByClassName('nav-btn');
-  for (let i = 0; i < botones.length; i++) {
-    botones[i].classList.remove('active');
-  }
-  
-  // 3. Mostrar el bloque seleccionado y pintar su botón de azul
-  document.getElementById(seccionId).style.display = 'block';
-  document.getElementById('btn-' + seccionId).classList.add('active');
 }

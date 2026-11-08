@@ -37,6 +37,25 @@
       </form>
       <div id="loginError" class="alert-error" style="display:none; margin-top:10px;"></div>
     </div>
+    <!-- VISTA CAMBIO DE CONTRASEÑA OBLIGATORIO -->
+<div id="vista-cambio-password" style="display: none;" class="card form-centered">
+  <h2>Actualizar Contraseña</h2>
+  <p style="color: #4b5563; font-size: 0.9rem; margin-bottom: 15px;">
+    Por seguridad, debes cambiar tu contraseña temporal antes de entrar al sistema.
+  </p>
+  <form id="formCambioPassword">
+    <div class="form-group">
+      <label>Nueva Contraseña:</label>
+      <input type="password" id="passNueva1" required minlength="4">
+    </div>
+    <div class="form-group">
+      <label>Confirmar Nueva Contraseña:</label>
+      <input type="password" id="passNueva2" required minlength="4">
+    </div>
+    <button type="submit" class="btn-primary">Guardar y Continuar</button>
+  </form>
+  <div id="cambioPassError" class="alert-error" style="display:none; margin-top:10px;"></div>
+</div>
 
    <!-- VISTA 2: PANEL DE ADMINISTRADOR -->
 <div id="vista-admin" style="display: none;">
