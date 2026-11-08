@@ -1,36 +1,35 @@
+// VARIABLES GLOBALES Y CONFIGURACIÓN
 let usuarioActual = null;
 let chartAvances = null;
+
+let globalListaGeneral = [];
 let globalSimpatizantesEdit = [];
+let globalStaffEdit = [];
+
+const ITEMS_POR_PAGINA = 50;
+let paginaActualLista = 1;
+let paginaActualEditSimp = 1;
 
 // ==========================================
-// NUEVO: INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
+// INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
 // ==========================================
 function iniciarApp() {
   try {
     const sesionGuardada = localStorage.getItem('sesionUsuario');
     if (sesionGuardada) {
       usuarioActual = JSON.parse(sesionGuardada);
-      
-      // Verificamos que el usuario realmente exista en la memoria
       if (usuarioActual && usuarioActual.usuario) {
-        if (usuarioActual.requiere_cambio) {
-          mostrarVista('vista-cambio-password');
-        } else {
-          redirigirPorRol();
-        }
-        return; // Terminamos aquí si logró entrar
+        if (usuarioActual.requiere_cambio) mostrarVista('vista-cambio-password');
+        else redirigirPorRol();
+        return;
       }
     }
   } catch (error) {
     console.error("Error al leer la memoria de sesión. Limpiando...", error);
-    localStorage.removeItem('sesionUsuario'); // Si hay error, limpiamos la basura
+    localStorage.removeItem('sesionUsuario');
   }
-  
-  // Si no hay sesión válida o hubo error, mostramos el login limpiamente
   mostrarVista('vista-login');
 }
-
-// Ejecutar la revisión inmediatamente al cargar la página
 iniciarApp();
 
 // ==========================================
@@ -48,20 +47,18 @@ function mostrarVista(vistaId) {
   } else {
     document.getElementById('navbar').style.display = 'none';
   }
-
   document.getElementById(vistaId).style.display = 'block';
 }
 
 function cerrarSesion() {
   usuarioActual = null;
-  localStorage.removeItem('sesionUsuario'); // Borrar memoria al salir
+  localStorage.removeItem('sesionUsuario'); 
   document.getElementById('formLogin').reset();
   mostrarVista('vista-login');
 }
 
 function redirigirPorRol() {
   document.getElementById('navTitle').innerText = `Panel: ${usuarioActual.rol.toUpperCase()} - ${usuarioActual.usuario}`;
-  
   if (usuarioActual.rol === 'admin') {
     mostrarVista('vista-admin');
     cargarAvancesAdmin(); 
@@ -93,8 +90,7 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
 
   if (res.ok) {
     usuarioActual = await res.json();
-    localStorage.setItem('sesionUsuario', JSON.stringify(usuarioActual)); // Guardar en memoria
-    
+    localStorage.setItem('sesionUsuario', JSON.stringify(usuarioActual)); 
     if (usuarioActual.requiere_cambio) {
       mostrarVista('vista-cambio-password');
       return;
@@ -118,7 +114,6 @@ document.getElementById('formCambioPassword').addEventListener('submit', async (
     errorDiv.style.display = 'block';
     return;
   }
-
   const res = await fetch(`/api/usuarios/${usuarioActual.id}/password`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -127,7 +122,7 @@ document.getElementById('formCambioPassword').addEventListener('submit', async (
 
   if (res.ok) {
     usuarioActual.requiere_cambio = false;
-    localStorage.setItem('sesionUsuario', JSON.stringify(usuarioActual)); // Actualizar memoria sin candado
+    localStorage.setItem('sesionUsuario', JSON.stringify(usuarioActual)); 
     document.getElementById('formCambioPassword').reset();
     redirigirPorRol(); 
   } else {
@@ -141,18 +136,15 @@ document.getElementById('formCambioPassword').addEventListener('submit', async (
 // ==========================================
 function mostrarSeccionAdmin(seccionId) {
   const secciones = document.getElementsByClassName('admin-seccion');
-  for (let i = 0; i < secciones.length; i++) {
-    secciones[i].style.display = 'none';
-  }
+  for (let i = 0; i < secciones.length; i++) secciones[i].style.display = 'none';
   
   const botones = document.getElementsByClassName('nav-btn');
-  for (let i = 0; i < botones.length; i++) {
-    botones[i].classList.remove('active');
-  }
+  for (let i = 0; i < botones.length; i++) botones[i].classList.remove('active');
   
   document.getElementById(seccionId).style.display = 'block';
   document.getElementById('btn-' + seccionId).classList.add('active');
 
+  if (seccionId === 'admin-lista') cargarListaGlobalAdmin();
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
 }
@@ -162,9 +154,6 @@ function toggleSeccionAdmin() {
   document.getElementById('divSeccionAdmin').style.display = (rol === 'pase_lista') ? 'block' : 'none';
 }
 
-// ==========================================
-// 4. FUNCIONES DEL ADMINISTRADOR (GRÁFICAS Y LISTAS)
-// ==========================================
 document.getElementById('formCrearUsuario').addEventListener('submit', async (e) => {
   e.preventDefault();
   const res = await fetch('/api/usuarios', {
@@ -177,7 +166,6 @@ document.getElementById('formCrearUsuario').addEventListener('submit', async (e)
       seccion_asignada: document.getElementById('nuevaSeccionAsignada').value
     })
   });
-
   if (res.ok) {
     alert('Usuario creado con éxito');
     document.getElementById('formCrearUsuario').reset();
@@ -187,32 +175,27 @@ document.getElementById('formCrearUsuario').addEventListener('submit', async (e)
   }
 });
 
+// ==========================================
+// 4. FUNCIONES DEL ADMINISTRADOR (GRÁFICAS)
+// ==========================================
 async function cargarAvancesAdmin() {
   try {
     const res = await fetch('/api/avances');
     const datos = await res.json();
     
-    // Tabla resumen
-    const tbody = document.getElementById('tablaAvances');
-    tbody.innerHTML = datos.map(d => `
-      <tr>
-        <td><strong>${d.seccion}</strong></td>
-        <td>${d.total_registrados}</td>
-        <td>${d.total_asistieron}</td>
-      </tr>
+    document.getElementById('tablaAvances').innerHTML = datos.map(d => `
+      <tr><td><strong>${d.seccion}</strong></td><td>${d.total_registrados}</td><td>${d.total_asistieron}</td></tr>
     `).join('');
 
-    // Filtro
-    const selectFiltro = document.getElementById('filtroSeccionAdmin');
-    const seccionActual = selectFiltro.value; 
-    selectFiltro.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + 
-      datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
-    if (seccionActual) selectFiltro.value = seccionActual;
+    // Actualizar todos los selectores de sección (Filtros)
+    const opcionesSecciones = '<option value="TODAS">Mostrar Todas</option>' + datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
+    ['filtroSeccionAdmin', 'filtroSeccionEditSimp'].forEach(id => {
+      const sel = document.getElementById(id);
+      if(sel) { const val = sel.value; sel.innerHTML = opcionesSecciones; if(val) sel.value = val; }
+    });
 
-    // Gráfica
     const ctx = document.getElementById('graficaAvances').getContext('2d');
     if (chartAvances) chartAvances.destroy(); 
-
     chartAvances = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -225,52 +208,81 @@ async function cargarAvancesAdmin() {
       options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
     });
 
-    cargarListaGlobalAdmin();
-  } catch (error) {
-    console.error("Error al cargar avances:", error);
-  }
+  } catch (error) { console.error("Error al cargar avances:", error); }
 }
 
+// ==========================================
+// 5. LISTA GENERAL (Paginada y con filtros)
+// ==========================================
 async function cargarListaGlobalAdmin() {
   const res = await fetch('/api/simpatizantes-todos');
-  const datos = await res.json();
-  const tbody = document.getElementById('tablaGlobalAdmin');
-  
-  tbody.innerHTML = datos.map(simp => `
-    <tr class="fila-global" data-seccion="${simp.seccion}">
+  globalListaGeneral = await res.json();
+  paginaActualLista = 1;
+  renderListaGlobal();
+}
+
+function renderListaGlobal() {
+  const filtroSec = document.getElementById('filtroSeccionAdmin').value;
+  const filtroTxt = document.getElementById('buscadorListaGlobal').value.toLowerCase();
+
+  let filtrados = globalListaGeneral.filter(s => {
+    const matchSec = (filtroSec === "TODAS" || s.seccion === filtroSec);
+    const matchTxt = s.nombre.toLowerCase().includes(filtroTxt);
+    return matchSec && matchTxt;
+  });
+
+  const totalPaginas = Math.ceil(filtrados.length / ITEMS_POR_PAGINA) || 1;
+  if (paginaActualLista > totalPaginas) paginaActualLista = totalPaginas;
+
+  const inicio = (paginaActualLista - 1) * ITEMS_POR_PAGINA;
+  const paginados = filtrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+
+  document.getElementById('tablaGlobalAdmin').innerHTML = paginados.map(simp => `
+    <tr>
       <td><span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-weight:600;">${simp.seccion}</span></td>
       <td><strong>${simp.nombre}</strong></td>
       <td>${simp.telefono || '---'}</td>
       <td>${simp.referencia || '---'}</td>
-      <td>
-        ${simp.asistio ? `<span style="color: #166534; font-weight: bold;">✅ Ya Votó</span>` : `<span style="color: #991b1b; font-weight: bold;">⏳ Pendiente</span>`}
-      </td>
+      <td>${simp.asistio ? `<span style="color: #166534; font-weight: bold;">✅ Ya Votó</span>` : `<span style="color: #991b1b; font-weight: bold;">⏳ Pendiente</span>`}</td>
     </tr>
   `).join('');
-  filtrarListaGlobal();
+
+  document.getElementById('paginacionListaGlobal').innerHTML = `
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualLista === 1 ? '0.5' : '1'}; pointer-events: ${paginaActualLista === 1 ? 'none' : 'auto'};" onclick="cambiarPaginaLista(-1)">⬅️ Anterior</button>
+    <span style="font-weight: 600; font-size: 0.9rem;">Página ${paginaActualLista} de ${totalPaginas} <br><small style="color: #64748b; font-weight: normal;">(${filtrados.length} resultados)</small></span>
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualLista === totalPaginas ? '0.5' : '1'}; pointer-events: ${paginaActualLista === totalPaginas ? 'none' : 'auto'};" onclick="cambiarPaginaLista(1)">Siguiente ➡️</button>
+  `;
 }
 
-function filtrarListaGlobal() {
-  const seccionSeleccionada = document.getElementById('filtroSeccionAdmin').value;
-  const filas = document.getElementsByClassName('fila-global');
-  for (let i = 0; i < filas.length; i++) {
-    const seccionFila = filas[i].getAttribute('data-seccion');
-    if (seccionSeleccionada === "TODAS" || seccionSeleccionada === seccionFila) {
-      filas[i].style.display = "";
-    } else {
-      filas[i].style.display = "none";
-    }
-  }
+function cambiarPaginaLista(delta) {
+  paginaActualLista += delta;
+  renderListaGlobal();
 }
 
 // ==========================================
-// 5. EDICIÓN DE BASES DE DATOS (ADMIN)
+// 6. EDICIÓN DE BASES DE DATOS (Paginadas/Filtros)
 // ==========================================
+
+// --- STAFF ---
 async function cargarGestionStaff() {
   const res = await fetch('/api/usuarios');
-  const datos = await res.json();
-  const tbody = document.getElementById('tablaGestionStaff');
-  tbody.innerHTML = datos.map(u => `
+  globalStaffEdit = await res.json();
+  
+  // Extraer las secciones únicas del staff para crear su filtro
+  const seccionesStaff = [...new Set(globalStaffEdit.map(u => u.seccion_asignada).filter(s => s))].sort();
+  const select = document.getElementById('filtroSeccionEditStaff');
+  const valActual = select.value;
+  select.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + seccionesStaff.map(s => `<option value="${s}">${s}</option>`).join('');
+  if(valActual) select.value = valActual;
+
+  renderGestionStaff();
+}
+
+function renderGestionStaff() {
+  const filtroSec = document.getElementById('filtroSeccionEditStaff').value;
+  let filtrados = globalStaffEdit.filter(u => (filtroSec === "TODAS" || u.seccion_asignada === filtroSec));
+
+  document.getElementById('tablaGestionStaff').innerHTML = filtrados.map(u => `
     <tr>
       <td><strong>${u.usuario}</strong></td>
       <td><span style="font-family: monospace; background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">${u.password}</span></td>
@@ -288,11 +300,31 @@ async function eliminarStaff(id) {
   }
 }
 
+// --- SIMPATIZANTES ---
 async function cargarGestionSimpatizantes() {
   const res = await fetch('/api/simpatizantes-todos');
   globalSimpatizantesEdit = await res.json();
-  const tbody = document.getElementById('tablaGestionSimp');
-  tbody.innerHTML = globalSimpatizantesEdit.map(s => `
+  paginaActualEditSimp = 1;
+  renderGestionSimpatizantes();
+}
+
+function renderGestionSimpatizantes() {
+  const filtroSec = document.getElementById('filtroSeccionEditSimp').value;
+  const filtroTxt = document.getElementById('buscadorEditSimp').value.toLowerCase();
+
+  let filtrados = globalSimpatizantesEdit.filter(s => {
+    const matchSec = (filtroSec === "TODAS" || s.seccion === filtroSec);
+    const matchTxt = s.nombre.toLowerCase().includes(filtroTxt);
+    return matchSec && matchTxt;
+  });
+
+  const totalPaginas = Math.ceil(filtrados.length / ITEMS_POR_PAGINA) || 1;
+  if (paginaActualEditSimp > totalPaginas) paginaActualEditSimp = totalPaginas;
+
+  const inicio = (paginaActualEditSimp - 1) * ITEMS_POR_PAGINA;
+  const paginados = filtrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+
+  document.getElementById('tablaGestionSimp').innerHTML = paginados.map(s => `
     <tr>
       <td>${s.seccion}</td>
       <td><strong>${s.nombre}</strong></td>
@@ -303,6 +335,17 @@ async function cargarGestionSimpatizantes() {
       </td>
     </tr>
   `).join('');
+
+  document.getElementById('paginacionEditSimp').innerHTML = `
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualEditSimp === 1 ? '0.5' : '1'}; pointer-events: ${paginaActualEditSimp === 1 ? 'none' : 'auto'};" onclick="cambiarPaginaEditSimp(-1)">⬅️ Anterior</button>
+    <span style="font-weight: 600; font-size: 0.9rem;">Página ${paginaActualEditSimp} de ${totalPaginas} <br><small style="color: #64748b; font-weight: normal;">(${filtrados.length} resultados)</small></span>
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualEditSimp === totalPaginas ? '0.5' : '1'}; pointer-events: ${paginaActualEditSimp === totalPaginas ? 'none' : 'auto'};" onclick="cambiarPaginaEditSimp(1)">Siguiente ➡️</button>
+  `;
+}
+
+function cambiarPaginaEditSimp(delta) {
+  paginaActualEditSimp += delta;
+  renderGestionSimpatizantes();
 }
 
 function abrirModalEditarSimp(id) {
@@ -344,11 +387,10 @@ async function eliminarSimpatizante(id) {
 }
 
 // ==========================================
-// 6. FUNCIONES CAPTURISTA
+// 7. FUNCIONES CAPTURISTA
 // ==========================================
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
-
   const apellidos = document.getElementById('simpApellidos').value.trim().toUpperCase();
   const nombres = document.getElementById('simpNombres').value.trim().toUpperCase();
   const nombreFormatoLista = `${apellidos}, ${nombres}`;
@@ -364,7 +406,6 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
       referencia: document.getElementById('simpReferencia').value
     })
   });
-
   if (res.ok) {
     alert('Simpatizante guardado correctamente');
     document.getElementById('formSimpatizante').reset();
@@ -374,14 +415,12 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
 });
 
 // ==========================================
-// 7. FUNCIONES PASE DE LISTA
+// 8. FUNCIONES PASE DE LISTA
 // ==========================================
 async function cargarPaseDeLista() {
   const res = await fetch(`/api/simpatizantes/${usuarioActual.seccion_asignada}`);
   const datos = await res.json();
-  const tbody = document.getElementById('tablaPaseLista');
-  
-  tbody.innerHTML = datos.map(simp => `
+  document.getElementById('tablaPaseLista').innerHTML = datos.map(simp => `
     <tr>
       <td><strong>${simp.nombre}</strong><br><small>${simp.telefono || ''}</small></td>
       <td>${simp.localidad}</td>
@@ -404,40 +443,29 @@ async function cargarPaseDeLista() {
 
 async function guardarCheckIn(id) {
   const casilla = document.getElementById(`check_${id}`);
-  
   if (!casilla.checked) {
     alert("⚠️ Primero marca la casilla antes de presionar Guardar.");
     return;
   }
-
   if (confirm("¿Confirmar Check In? Una vez guardado, YA NO se podrá desmarcar.")) {
     const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ asistio: true })
     });
-
-    if (res.ok) {
-      cargarPaseDeLista();
-    } else {
-      alert("Hubo un error al conectar con la base de datos.");
-    }
+    if (res.ok) cargarPaseDeLista();
+    else alert("Hubo un error al conectar con la base de datos.");
   }
 }
 
 function filtrarLista() {
   const filtro = document.getElementById('buscadorLista').value.toLowerCase();
   const filas = document.getElementById('tablaPaseLista').getElementsByTagName('tr');
-
   for (let i = 0; i < filas.length; i++) {
     const celdaNombre = filas[i].getElementsByTagName('td')[0];
     if (celdaNombre) {
       const texto = celdaNombre.textContent || celdaNombre.innerText;
-      if (texto.toLowerCase().indexOf(filtro) > -1) {
-        filas[i].style.display = "";
-      } else {
-        filas[i].style.display = "none";
-      }
+      filas[i].style.display = (texto.toLowerCase().indexOf(filtro) > -1) ? "" : "none";
     }
   }
 }
