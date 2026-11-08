@@ -3,22 +3,35 @@ let chartAvances = null;
 let globalSimpatizantesEdit = [];
 
 // ==========================================
-// NUEVO: MANTENER SESIÓN AL RECARGAR PÁGINA
+// NUEVO: INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-  const sesionGuardada = localStorage.getItem('sesionUsuario');
-  if (sesionGuardada) {
-    usuarioActual = JSON.parse(sesionGuardada);
-    // Si recargó estando en cambio de contraseña obligatorio
-    if (usuarioActual.requiere_cambio) {
-      mostrarVista('vista-cambio-password');
-    } else {
-      redirigirPorRol();
+function iniciarApp() {
+  try {
+    const sesionGuardada = localStorage.getItem('sesionUsuario');
+    if (sesionGuardada) {
+      usuarioActual = JSON.parse(sesionGuardada);
+      
+      // Verificamos que el usuario realmente exista en la memoria
+      if (usuarioActual && usuarioActual.usuario) {
+        if (usuarioActual.requiere_cambio) {
+          mostrarVista('vista-cambio-password');
+        } else {
+          redirigirPorRol();
+        }
+        return; // Terminamos aquí si logró entrar
+      }
     }
-  } else {
-    mostrarVista('vista-login');
+  } catch (error) {
+    console.error("Error al leer la memoria de sesión. Limpiando...", error);
+    localStorage.removeItem('sesionUsuario'); // Si hay error, limpiamos la basura
   }
-});
+  
+  // Si no hay sesión válida o hubo error, mostramos el login limpiamente
+  mostrarVista('vista-login');
+}
+
+// Ejecutar la revisión inmediatamente al cargar la página
+iniciarApp();
 
 // ==========================================
 // 1. CONTROL DE VISTAS Y RUTAS
@@ -175,43 +188,47 @@ document.getElementById('formCrearUsuario').addEventListener('submit', async (e)
 });
 
 async function cargarAvancesAdmin() {
-  const res = await fetch('/api/avances');
-  const datos = await res.json();
-  
-  // Tabla resumen
-  const tbody = document.getElementById('tablaAvances');
-  tbody.innerHTML = datos.map(d => `
-    <tr>
-      <td><strong>${d.seccion}</strong></td>
-      <td>${d.total_registrados}</td>
-      <td>${d.total_asistieron}</td>
-    </tr>
-  `).join('');
+  try {
+    const res = await fetch('/api/avances');
+    const datos = await res.json();
+    
+    // Tabla resumen
+    const tbody = document.getElementById('tablaAvances');
+    tbody.innerHTML = datos.map(d => `
+      <tr>
+        <td><strong>${d.seccion}</strong></td>
+        <td>${d.total_registrados}</td>
+        <td>${d.total_asistieron}</td>
+      </tr>
+    `).join('');
 
-  // Filtro
-  const selectFiltro = document.getElementById('filtroSeccionAdmin');
-  const seccionActual = selectFiltro.value; 
-  selectFiltro.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + 
-    datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
-  if (seccionActual) selectFiltro.value = seccionActual;
+    // Filtro
+    const selectFiltro = document.getElementById('filtroSeccionAdmin');
+    const seccionActual = selectFiltro.value; 
+    selectFiltro.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + 
+      datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
+    if (seccionActual) selectFiltro.value = seccionActual;
 
-  // Gráfica
-  const ctx = document.getElementById('graficaAvances').getContext('2d');
-  if (chartAvances) chartAvances.destroy(); 
+    // Gráfica
+    const ctx = document.getElementById('graficaAvances').getContext('2d');
+    if (chartAvances) chartAvances.destroy(); 
 
-  chartAvances = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: datos.map(d => `Secc ${d.seccion}`),
-      datasets: [
-        { label: 'Faltan de Votar', data: datos.map(d => d.total_registrados - d.total_asistieron), backgroundColor: '#94a3b8' },
-        { label: 'Ya Votaron', data: datos.map(d => d.total_asistieron), backgroundColor: '#16a34a' }
-      ]
-    },
-    options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
-  });
+    chartAvances = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: datos.map(d => `Secc ${d.seccion}`),
+        datasets: [
+          { label: 'Faltan de Votar', data: datos.map(d => d.total_registrados - d.total_asistieron), backgroundColor: '#94a3b8' },
+          { label: 'Ya Votaron', data: datos.map(d => d.total_asistieron), backgroundColor: '#16a34a' }
+        ]
+      },
+      options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+    });
 
-  cargarListaGlobalAdmin();
+    cargarListaGlobalAdmin();
+  } catch (error) {
+    console.error("Error al cargar avances:", error);
+  }
 }
 
 async function cargarListaGlobalAdmin() {
@@ -249,7 +266,6 @@ function filtrarListaGlobal() {
 // ==========================================
 // 5. EDICIÓN DE BASES DE DATOS (ADMIN)
 // ==========================================
-
 async function cargarGestionStaff() {
   const res = await fetch('/api/usuarios');
   const datos = await res.json();
