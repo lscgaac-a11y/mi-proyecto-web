@@ -163,7 +163,8 @@ app.patch('/api/usuarios/:id/password', async (req, res) => {
 // 9. Gestionar Staff (Ver y Eliminar)
 app.get('/api/usuarios', async (req, res) => {
   try {
-    const resultado = await pool.query("SELECT id, usuario, rol, seccion_asignada FROM usuarios WHERE rol != 'admin' ORDER BY id ASC");
+    // Agregamos "password" a la selección de datos
+    const resultado = await pool.query("SELECT id, usuario, password, rol, seccion_asignada FROM usuarios WHERE rol != 'admin' ORDER BY id ASC");
     res.json(resultado.rows);
   } catch (error) { res.status(500).json({ error: 'Error' }); }
 });

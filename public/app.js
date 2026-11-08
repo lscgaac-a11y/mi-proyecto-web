@@ -230,6 +230,7 @@ function filtrarListaGlobal() {
 // ==========================================
 
 // --- Editar Staff ---
+// --- Editar Staff ---
 async function cargarGestionStaff() {
   const res = await fetch('/api/usuarios');
   const datos = await res.json();
@@ -237,6 +238,7 @@ async function cargarGestionStaff() {
   tbody.innerHTML = datos.map(u => `
     <tr>
       <td><strong>${u.usuario}</strong></td>
+      <td><span style="font-family: monospace; background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">${u.password}</span></td>
       <td>${u.rol.toUpperCase()}</td>
       <td>${u.seccion_asignada || '---'}</td>
       <td><button class="btn-secondary" style="background:#dc2626; padding: 4px 8px;" onclick="eliminarStaff(${u.id})">🗑️ Borrar</button></td>
