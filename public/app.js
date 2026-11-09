@@ -5,10 +5,12 @@ let chartAvances = null;
 let globalListaGeneral = [];
 let globalSimpatizantesEdit = [];
 let globalStaffEdit = [];
+let globalPaseListaAdmin = [];
 
 const ITEMS_POR_PAGINA = 50;
 let paginaActualLista = 1;
 let paginaActualEditSimp = 1;
+let paginaActualPaseListaAdmin = 1;
 
 // ==========================================
 // INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
@@ -60,23 +62,21 @@ function cerrarSesion() {
 function redirigirPorRol() {
   document.getElementById('navTitle').innerText = `Panel: ${usuarioActual.rol.toUpperCase()} - ${usuarioActual.usuario}`;
   
-  // Si es ADMIN o COORDINADOR, comparten el mismo panel pero con permisos distintos
   if (usuarioActual.rol === 'admin' || usuarioActual.rol === 'coordinador') {
     mostrarVista('vista-admin');
     
     const esAdmin = usuarioActual.rol === 'admin';
     
-    // Ocultar pestañas al coordinador
+    // Configuración de accesos en el menú lateral
     document.getElementById('btn-admin-resumen').style.display = esAdmin ? 'block' : 'none';
     document.getElementById('btn-admin-grafica').style.display = esAdmin ? 'block' : 'none';
     document.getElementById('btn-admin-lista').style.display = esAdmin ? 'block' : 'none';
     document.getElementById('btn-admin-actualizar').style.display = esAdmin ? 'block' : 'none';
+    document.getElementById('btn-admin-pase-lista-global').style.display = esAdmin ? 'block' : 'none';
     
-    // Ocultar la opción de crear Coordinadores si no es el Admin Maestro
     const optCoordinador = document.getElementById('optRolCoordinador');
     if (optCoordinador) optCoordinador.style.display = esAdmin ? 'block' : 'none';
     
-    // Evitar que un coordinador asigne rol coordinador por accidente si estaba seleccionado
     if (!esAdmin && document.getElementById('nuevoRol').value === 'coordinador') {
       document.getElementById('nuevoRol').value = 'capturista';
     }
@@ -154,7 +154,7 @@ document.getElementById('formCambioPassword').addEventListener('submit', async (
 });
 
 // ==========================================
-// 3. NAVEGACIÓN DEL PANEL ADMINISTRADOR/COOR.
+// 3. NAVEGACIÓN DEL PANEL ADMIN/COORDINADOR
 // ==========================================
 function mostrarSeccionAdmin(seccionId) {
   const secciones = document.getElementsByClassName('admin-seccion');
@@ -166,10 +166,10 @@ function mostrarSeccionAdmin(seccionId) {
   document.getElementById(seccionId).style.display = 'block';
   document.getElementById('btn-' + seccionId).classList.add('active');
 
-  // Si abren estas pestañas, descargamos los datos frescos de la BD
   if (seccionId === 'admin-lista') cargarListaGlobalAdmin();
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
+  if (seccionId === 'admin-pase-lista-global') cargarPaseListaGlobalAdmin();
 }
 
 function toggleSeccionAdmin() {
@@ -211,7 +211,7 @@ async function cargarAvancesAdmin() {
     `).join('');
 
     const opcionesSecciones = '<option value="TODAS">Mostrar Todas</option>' + datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
-    ['filtroSeccionAdmin', 'filtroSeccionEditSimp'].forEach(id => {
+    ['filtroSeccionAdmin', 'filtroSeccionEditSimp', 'filtroSeccionPaseListaGlobal'].forEach(id => {
       const sel = document.getElementById(id);
       if(sel) { const val = sel.value; sel.innerHTML = opcionesSecciones; if(val) sel.value = val; }
     });
@@ -234,7 +234,7 @@ async function cargarAvancesAdmin() {
 }
 
 // ==========================================
-// 5. LISTA GENERAL (Paginada y con filtros)
+// 5. LISTA GENERAL (Paginada)
 // ==========================================
 async function cargarListaGlobalAdmin() {
   const res = await fetch('/api/simpatizantes-todos');
@@ -284,18 +284,14 @@ function cambiarPaginaLista(delta) {
 // ==========================================
 // 6. EDICIÓN DE BASES DE DATOS
 // ==========================================
-
-// --- STAFF ---
 async function cargarGestionStaff() {
   const res = await fetch('/api/usuarios');
   globalStaffEdit = await res.json();
-  
   const seccionesStaff = [...new Set(globalStaffEdit.map(u => u.seccion_asignada).filter(s => s))].sort();
   const select = document.getElementById('filtroSeccionEditStaff');
   const valActual = select.value;
   select.innerHTML = '<option value="TODAS">Mostrar Todas</option>' + seccionesStaff.map(s => `<option value="${s}">${s}</option>`).join('');
   if(valActual) select.value = valActual;
-
   renderGestionStaff();
 }
 
@@ -321,7 +317,6 @@ async function eliminarStaff(id) {
   }
 }
 
-// --- SIMPATIZANTES ---
 async function cargarGestionSimpatizantes() {
   const res = await fetch('/api/simpatizantes-todos');
   globalSimpatizantesEdit = await res.json();
@@ -408,7 +403,118 @@ async function eliminarSimpatizante(id) {
 }
 
 // ==========================================
-// 7. FUNCIONES CAPTURISTA
+// 7. CAPTURA DESDE ADMIN/COORDINADOR
+// ==========================================
+document.getElementById('formAdminSimpatizante').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const apellidos = document.getElementById('adminSimpApellidos').value.trim().toUpperCase();
+  const nombres = document.getElementById('adminSimpNombres').value.trim().toUpperCase();
+  const nombreFormatoLista = `${apellidos}, ${nombres}`;
+
+  const res = await fetch('/api/simpatizantes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nombre: nombreFormatoLista,
+      telefono: document.getElementById('adminSimpTelefono').value,
+      seccion: document.getElementById('adminSimpSeccion').value,
+      localidad: document.getElementById('adminSimpLocalidad').value,
+      referencia: document.getElementById('adminSimpReferencia').value
+    })
+  });
+  if (res.ok) {
+    alert('Simpatizante guardado correctamente');
+    document.getElementById('formAdminSimpatizante').reset();
+    if (usuarioActual.rol === 'admin') cargarAvancesAdmin(); 
+  } else {
+    alert('Error al guardar simpatizante');
+  }
+});
+
+// ==========================================
+// 8. PASE DE LISTA GLOBAL (ADMIN)
+// ==========================================
+async function cargarPaseListaGlobalAdmin() {
+  const res = await fetch('/api/simpatizantes-todos');
+  globalPaseListaAdmin = await res.json();
+  paginaActualPaseListaAdmin = 1;
+  renderPaseListaGlobalAdmin();
+}
+
+function renderPaseListaGlobalAdmin() {
+  const filtroSec = document.getElementById('filtroSeccionPaseListaGlobal').value;
+  const filtroTxt = document.getElementById('buscadorPaseListaGlobal').value.toLowerCase();
+
+  let filtrados = globalPaseListaAdmin.filter(s => {
+    const matchSec = (filtroSec === "TODAS" || s.seccion === filtroSec);
+    const matchTxt = s.nombre.toLowerCase().includes(filtroTxt);
+    return matchSec && matchTxt;
+  });
+
+  const totalPaginas = Math.ceil(filtrados.length / ITEMS_POR_PAGINA) || 1;
+  if (paginaActualPaseListaAdmin > totalPaginas) paginaActualPaseListaAdmin = totalPaginas;
+
+  const inicio = (paginaActualPaseListaAdmin - 1) * ITEMS_POR_PAGINA;
+  const paginados = filtrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+
+  document.getElementById('tablaPaseListaGlobal').innerHTML = paginados.map(simp => `
+    <tr>
+      <td><span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-weight:600;">${simp.seccion}</span></td>
+      <td><strong>${simp.nombre}</strong><br><small>${simp.telefono || ''}</small></td>
+      <td>${simp.localidad}<br><small style="color:#6b7280;">${simp.referencia || ''}</small></td>
+      <td>
+        ${simp.asistio 
+          ? `<div style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+               <input type="checkbox" checked disabled style="transform: scale(1.5);"> 
+               <span>Ya votó</span>
+             </div>`
+          : `<div style="display: flex; gap: 12px; align-items: center;">
+               <input type="checkbox" id="check_admin_${simp.id}" style="transform: scale(1.5);">
+               <button class="btn-primary" style="padding: 6px 12px; font-size: 0.85rem; width: auto;" onclick="guardarCheckInAdmin(${simp.id})">Guardar</button>
+             </div>`
+        }
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('paginacionPaseListaGlobal').innerHTML = `
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualPaseListaAdmin === 1 ? '0.5' : '1'}; pointer-events: ${paginaActualPaseListaAdmin === 1 ? 'none' : 'auto'};" onclick="cambiarPaginaPaseListaAdmin(-1)">⬅️ Anterior</button>
+    <span style="font-weight: 600; font-size: 0.9rem;">Página ${paginaActualPaseListaAdmin} de ${totalPaginas} <br><small style="color: #64748b; font-weight: normal;">(${filtrados.length} resultados)</small></span>
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualPaseListaAdmin === totalPaginas ? '0.5' : '1'}; pointer-events: ${paginaActualPaseListaAdmin === totalPaginas ? 'none' : 'auto'};" onclick="cambiarPaginaPaseListaAdmin(1)">Siguiente ➡️</button>
+  `;
+}
+
+function cambiarPaginaPaseListaAdmin(delta) {
+  paginaActualPaseListaAdmin += delta;
+  renderPaseListaGlobalAdmin();
+}
+
+async function guardarCheckInAdmin(id) {
+  const casilla = document.getElementById(`check_admin_${id}`);
+  if (!casilla.checked) {
+    alert("⚠️ Primero marca la casilla antes de presionar Guardar.");
+    return;
+  }
+  if (confirm("¿Confirmar Check In? Una vez guardado, YA NO se podrá desmarcar.")) {
+    const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asistio: true })
+    });
+    if (res.ok) {
+      // Actualizamos localmente para no refrescar y perder la página actual
+      const simp = globalPaseListaAdmin.find(s => s.id === id);
+      if (simp) simp.asistio = true;
+      renderPaseListaGlobalAdmin();
+      if (usuarioActual.rol === 'admin') cargarAvancesAdmin();
+    } else {
+      alert("Hubo un error al conectar con la base de datos.");
+    }
+  }
+}
+
+// ==========================================
+// 9. FUNCIONES DE STAFF REGULAR
 // ==========================================
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -435,9 +541,6 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
   }
 });
 
-// ==========================================
-// 8. FUNCIONES PASE DE LISTA
-// ==========================================
 async function cargarPaseDeLista() {
   const res = await fetch(`/api/simpatizantes/${usuarioActual.seccion_asignada}`);
   const datos = await res.json();
