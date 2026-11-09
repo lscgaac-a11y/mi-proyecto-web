@@ -13,26 +13,30 @@ let paginaActualEditSimp = 1;
 let paginaActualPaseListaAdmin = 1;
 
 // ==========================================
-// INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
+// INICIALIZACIÓN SEGURA (ESPERAR A QUE CARGUE LA WEB)
 // ==========================================
-function iniciarApp() {
+document.addEventListener('DOMContentLoaded', () => {
   try {
     const sesionGuardada = localStorage.getItem('sesionUsuario');
     if (sesionGuardada) {
       usuarioActual = JSON.parse(sesionGuardada);
       if (usuarioActual && usuarioActual.usuario) {
-        if (usuarioActual.requiere_cambio) mostrarVista('vista-cambio-password');
-        else redirigirPorRol();
-        return;
+        if (usuarioActual.requiere_cambio) {
+          mostrarVista('vista-cambio-password');
+        } else {
+          redirigirPorRol();
+        }
+        return; // Salimos de la función si logró iniciar sesión
       }
     }
   } catch (error) {
-    console.error("Error al leer la memoria de sesión. Limpiando...", error);
-    localStorage.removeItem('sesionUsuario');
+    console.error("Error al leer la memoria de sesión:", error);
+    localStorage.removeItem('sesionUsuario'); // Limpiar basura si la hay
   }
+  
+  // Solo muestra el login si de verdad no había sesión guardada
   mostrarVista('vista-login');
-}
-iniciarApp();
+});
 
 // ==========================================
 // 1. CONTROL DE VISTAS Y RUTAS
@@ -502,7 +506,6 @@ async function guardarCheckInAdmin(id) {
       body: JSON.stringify({ asistio: true })
     });
     if (res.ok) {
-      // Actualizamos localmente para no refrescar y perder la página actual
       const simp = globalPaseListaAdmin.find(s => s.id === id);
       if (simp) simp.asistio = true;
       renderPaseListaGlobalAdmin();
