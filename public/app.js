@@ -18,43 +18,26 @@ let paginaActualPaseListaAdmin = 1;
 function iniciarApp() {
   const sesionGuardada = localStorage.getItem('sesionUsuario');
   
-  if (!sesionGuardada) {
-    mostrarVista('vista-login');
-    return;
-  }
-
-  try {
-    // 1. Extraer los datos guardados
-    usuarioActual = JSON.parse(sesionGuardada);
-  } catch (error) {
-    console.error("Error crítico al leer la sesión guardada:", error);
-    localStorage.removeItem('sesionUsuario');
-    mostrarVista('vista-login');
-    return;
-  }
-
-  // 2. Verificar que los datos sean válidos y redirigir
-  if (usuarioActual && usuarioActual.usuario) {
-    // Usamos un pequeño retraso para asegurar que los elementos HTML ya existen
-    setTimeout(() => {
-      try {
+  if (sesionGuardada) {
+    try {
+      usuarioActual = JSON.parse(sesionGuardada);
+      if (usuarioActual && usuarioActual.usuario) {
         if (usuarioActual.requiere_cambio) {
           mostrarVista('vista-cambio-password');
         } else {
           redirigirPorRol();
         }
-      } catch (err) {
-        console.error("Fallo al dibujar el panel tras recargar:", err);
-        mostrarVista('vista-login');
+        return; // Éxito: detiene la función aquí
       }
-    }, 50);
-  } else {
-    mostrarVista('vista-login');
+    } catch (error) {
+      console.error("Memoria corrupta, limpiando...");
+      localStorage.removeItem('sesionUsuario');
+    }
   }
+  
+  // Si no hay sesión o hubo error, muestra el login
+  mostrarVista('vista-login');
 }
-
-// BLOQUEO ESTRATÉGICO: Esperar a que la página esté 100% cargada antes de iniciar
-window.addEventListener('load', iniciarApp);
 
 // ==========================================
 // 1. CONTROL DE VISTAS Y RUTAS
@@ -613,3 +596,8 @@ function filtrarLista() {
     }
   }
 }
+
+// ==========================================
+// ARRANQUE FINAL
+// ==========================================
+iniciarApp(); // <-- Ejecución directa sin esperas
