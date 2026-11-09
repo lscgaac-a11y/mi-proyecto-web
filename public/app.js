@@ -13,30 +13,48 @@ let paginaActualEditSimp = 1;
 let paginaActualPaseListaAdmin = 1;
 
 // ==========================================
-// INICIALIZACIÓN SEGURA (ESPERAR A QUE CARGUE LA WEB)
+// INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
+function iniciarApp() {
+  const sesionGuardada = localStorage.getItem('sesionUsuario');
+  
+  if (!sesionGuardada) {
+    mostrarVista('vista-login');
+    return;
+  }
+
   try {
-    const sesionGuardada = localStorage.getItem('sesionUsuario');
-    if (sesionGuardada) {
-      usuarioActual = JSON.parse(sesionGuardada);
-      if (usuarioActual && usuarioActual.usuario) {
+    // 1. Extraer los datos guardados
+    usuarioActual = JSON.parse(sesionGuardada);
+  } catch (error) {
+    console.error("Error crítico al leer la sesión guardada:", error);
+    localStorage.removeItem('sesionUsuario');
+    mostrarVista('vista-login');
+    return;
+  }
+
+  // 2. Verificar que los datos sean válidos y redirigir
+  if (usuarioActual && usuarioActual.usuario) {
+    // Usamos un pequeño retraso para asegurar que los elementos HTML ya existen
+    setTimeout(() => {
+      try {
         if (usuarioActual.requiere_cambio) {
           mostrarVista('vista-cambio-password');
         } else {
           redirigirPorRol();
         }
-        return; // Salimos de la función si logró iniciar sesión
+      } catch (err) {
+        console.error("Fallo al dibujar el panel tras recargar:", err);
+        mostrarVista('vista-login');
       }
-    }
-  } catch (error) {
-    console.error("Error al leer la memoria de sesión:", error);
-    localStorage.removeItem('sesionUsuario'); // Limpiar basura si la hay
+    }, 50);
+  } else {
+    mostrarVista('vista-login');
   }
-  
-  // Solo muestra el login si de verdad no había sesión guardada
-  mostrarVista('vista-login');
-});
+}
+
+// BLOQUEO ESTRATÉGICO: Esperar a que la página esté 100% cargada antes de iniciar
+window.addEventListener('load', iniciarApp);
 
 // ==========================================
 // 1. CONTROL DE VISTAS Y RUTAS
@@ -71,7 +89,6 @@ function redirigirPorRol() {
     
     const esAdmin = usuarioActual.rol === 'admin';
     
-    // Configuración de accesos en el menú lateral
     document.getElementById('btn-admin-resumen').style.display = esAdmin ? 'block' : 'none';
     document.getElementById('btn-admin-grafica').style.display = esAdmin ? 'block' : 'none';
     document.getElementById('btn-admin-lista').style.display = esAdmin ? 'block' : 'none';
