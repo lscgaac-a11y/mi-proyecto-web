@@ -6,11 +6,13 @@ let globalListaGeneral = [];
 let globalSimpatizantesEdit = [];
 let globalStaffEdit = [];
 let globalPaseListaAdmin = [];
+let globalPromotoresEdit = [];
 
 const ITEMS_POR_PAGINA = 50;
 let paginaActualLista = 1;
 let paginaActualEditSimp = 1;
 let paginaActualPaseListaAdmin = 1;
+let paginaActualEditProm = 1;
 
 // ==========================================
 // INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
@@ -27,7 +29,7 @@ function iniciarApp() {
         } else {
           redirigirPorRol();
         }
-        return; // Éxito: detiene la función aquí
+        return;
       }
     } catch (error) {
       console.error("Memoria corrupta, limpiando...");
@@ -35,7 +37,6 @@ function iniciarApp() {
     }
   }
   
-  // Si no hay sesión o hubo error, muestra el login
   mostrarVista('vista-login');
 }
 
@@ -174,6 +175,7 @@ function mostrarSeccionAdmin(seccionId) {
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
   if (seccionId === 'admin-pase-lista-global') cargarPaseListaGlobalAdmin();
+  if (seccionId === 'admin-gestion-promotores') cargarGestionPromotores();
 }
 
 function toggleSeccionAdmin() {
@@ -215,7 +217,7 @@ async function cargarAvancesAdmin() {
     `).join('');
 
     const opcionesSecciones = '<option value="TODAS">Mostrar Todas</option>' + datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
-    ['filtroSeccionAdmin', 'filtroSeccionEditSimp', 'filtroSeccionPaseListaGlobal'].forEach(id => {
+    ['filtroSeccionAdmin', 'filtroSeccionEditSimp', 'filtroSeccionPaseListaGlobal', 'filtroSeccionEditProm'].forEach(id => {
       const sel = document.getElementById(id);
       if(sel) { const val = sel.value; sel.innerHTML = opcionesSecciones; if(val) sel.value = val; }
     });
@@ -517,7 +519,119 @@ async function guardarCheckInAdmin(id) {
 }
 
 // ==========================================
-// 9. FUNCIONES DE STAFF REGULAR
+// 9. LÓGICA DE PROMOTORES
+// ==========================================
+
+// Registrar Promotor (Concatena: Nombre(s) + Apellidos)
+document.getElementById('formAdminPromotor').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nombres = document.getElementById('promNombres').value.trim().toUpperCase();
+  const apellidos = document.getElementById('promApellidos').value.trim().toUpperCase();
+  const nombreCompleto = `${nombres} ${apellidos}`;
+
+  const res = await fetch('/api/promotores', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nombre: nombreCompleto,
+      telefono: document.getElementById('promTelefono').value,
+      seccion: document.getElementById('promSeccion').value,
+      localidad: document.getElementById('promLocalidad').value
+    })
+  });
+  if (res.ok) {
+    alert('Promotor guardado correctamente');
+    document.getElementById('formAdminPromotor').reset();
+  } else {
+    alert('Error al guardar promotor');
+  }
+});
+
+// Cargar y Filtrar Promotores
+async function cargarGestionPromotores() {
+  const res = await fetch('/api/promotores');
+  globalPromotoresEdit = await res.json();
+  paginaActualEditProm = 1;
+  renderGestionPromotores();
+}
+
+function renderGestionPromotores() {
+  const filtroSec = document.getElementById('filtroSeccionEditProm').value;
+  const filtroTxt = document.getElementById('buscadorEditProm').value.toLowerCase();
+
+  let filtrados = globalPromotoresEdit.filter(p => {
+    const matchSec = (filtroSec === "TODAS" || p.seccion === filtroSec);
+    const matchTxt = p.nombre.toLowerCase().includes(filtroTxt);
+    return matchSec && matchTxt;
+  });
+
+  const totalPaginas = Math.ceil(filtrados.length / ITEMS_POR_PAGINA) || 1;
+  if (paginaActualEditProm > totalPaginas) paginaActualEditProm = totalPaginas;
+
+  const inicio = (paginaActualEditProm - 1) * ITEMS_POR_PAGINA;
+  const paginados = filtrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+
+  document.getElementById('tablaGestionProm').innerHTML = paginados.map(p => `
+    <tr>
+      <td>${p.seccion}</td>
+      <td><strong>${p.nombre}</strong></td>
+      <td>${p.telefono || '---'}</td>
+      <td>${p.localidad || '---'}</td>
+      <td style="display:flex; gap:5px;">
+        <button class="btn-primary" style="padding: 4px 8px;" onclick="abrirModalEditarProm(${p.id})">✏️</button>
+        <button class="btn-secondary" style="background:#dc2626; padding: 4px 8px;" onclick="eliminarPromotor(${p.id})">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('paginacionEditProm').innerHTML = `
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualEditProm === 1 ? '0.5' : '1'}; pointer-events: ${paginaActualEditProm === 1 ? 'none' : 'auto'};" onclick="cambiarPaginaEditProm(-1)">⬅️ Anterior</button>
+    <span style="font-weight: 600; font-size: 0.9rem;">Página ${paginaActualEditProm} de ${totalPaginas} <br><small style="color: #64748b; font-weight: normal;">(${filtrados.length} resultados)</small></span>
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualEditProm === totalPaginas ? '0.5' : '1'}; pointer-events: ${paginaActualEditProm === totalPaginas ? 'none' : 'auto'};" onclick="cambiarPaginaEditProm(1)">Siguiente ➡️</button>
+  `;
+}
+
+function cambiarPaginaEditProm(delta) {
+  paginaActualEditProm += delta;
+  renderGestionPromotores();
+}
+
+function abrirModalEditarProm(id) {
+  const prom = globalPromotoresEdit.find(x => x.id === id);
+  document.getElementById('editPromId').value = prom.id;
+  document.getElementById('editPromNombre').value = prom.nombre;
+  document.getElementById('editPromTelefono').value = prom.telefono;
+  document.getElementById('editPromSeccion').value = prom.seccion;
+  document.getElementById('editPromLocalidad').value = prom.localidad;
+  document.getElementById('modalEditarProm').style.display = 'flex';
+}
+
+document.getElementById('formEditarProm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('editPromId').value;
+  await fetch(`/api/promotores/${id}/editar`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nombre: document.getElementById('editPromNombre').value.toUpperCase(),
+      telefono: document.getElementById('editPromTelefono').value,
+      seccion: document.getElementById('editPromSeccion').value,
+      localidad: document.getElementById('editPromLocalidad').value
+    })
+  });
+  document.getElementById('modalEditarProm').style.display = 'none';
+  cargarGestionPromotores();
+});
+
+async function eliminarPromotor(id) {
+  if(confirm('¿Eliminar permanentemente a este promotor?')) {
+    await fetch(`/api/promotores/${id}`, { method: 'DELETE' });
+    cargarGestionPromotores();
+  }
+}
+
+// ==========================================
+// 10. FUNCIONES DE STAFF REGULAR
 // ==========================================
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -597,7 +711,5 @@ function filtrarLista() {
   }
 }
 
-// ==========================================
-// ARRANQUE FINAL
-// ==========================================
-iniciarApp(); // <-- Ejecución directa sin esperas
+// ARRANQUE DE APLICACIÓN
+iniciarApp();

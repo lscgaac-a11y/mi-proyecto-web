@@ -51,12 +51,14 @@
           <h3>Menú Principal</h3>
           <ul class="sidebar-nav">
             <li><button onclick="mostrarSeccionAdmin('admin-captura')" class="nav-btn" id="btn-admin-captura">✍️ Capturar Simpatizante</button></li>
+            <li><button onclick="mostrarSeccionAdmin('admin-captura-promotor')" class="nav-btn" id="btn-admin-captura-promotor">👔 Capturar Promotor</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-pase-lista-global')" class="nav-btn" id="btn-admin-pase-lista-global">✅ Pase de Lista (Todas)</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-staff')" class="nav-btn active" id="btn-admin-staff">👥 Captura de Staff</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-resumen')" class="nav-btn" id="btn-admin-resumen">📊 Resumen Numérico</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-grafica')" class="nav-btn" id="btn-admin-grafica">📉 Gráfica de Avance</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-lista')" class="nav-btn" id="btn-admin-lista">📋 Lista General</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-simp')" class="nav-btn" id="btn-admin-gestion-simp">📝 Editar Simpatizantes</button></li>
+            <li><button onclick="mostrarSeccionAdmin('admin-gestion-promotores')" class="nav-btn" id="btn-admin-gestion-promotores">👔 Editar Promotores</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-staff')" class="nav-btn" id="btn-admin-gestion-staff">⚙️ Editar Staff</button></li>
           </ul>
           <button onclick="cargarAvancesAdmin()" id="btn-admin-actualizar" class="btn-secondary" style="width: 100%; margin-top: 20px;">🔄 Actualizar Datos</button>
@@ -192,6 +194,55 @@
             <div id="paginacionPaseListaGlobal" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
+          <!-- 9. NUEVA SECCIÓN: Captura de Promotor -->
+          <section id="admin-captura-promotor" class="card admin-seccion" style="display: none;">
+            <h2>Captura de Promotor</h2>
+            <form id="formAdminPromotor">
+              <div class="form-group">
+                <label>Nombre(s):</label>
+                <input type="text" id="promNombres" placeholder="Ej. JUAN CARLOS" required>
+              </div>
+              <div class="form-group">
+                <label>Apellido Paterno y Materno:</label>
+                <input type="text" id="promApellidos" placeholder="Ej. PÉREZ LÓPEZ" required>
+              </div>
+              <div class="form-group">
+                <label>Teléfono:</label>
+                <input type="text" id="promTelefono">
+              </div>
+              <div class="form-group">
+                <label>Sección Electoral:</label>
+                <input type="text" id="promSeccion" placeholder="Ej. 0645" required>
+              </div>
+              <div class="form-group">
+                <label>Localidad / Colonia:</label>
+                <input type="text" id="promLocalidad" required>
+              </div>
+              <button type="submit" class="btn-primary">Guardar Promotor</button>
+            </form>
+          </section>
+
+          <!-- 10. NUEVA SECCIÓN: Edición de Promotores -->
+          <section id="admin-gestion-promotores" class="card admin-seccion" style="display: none;">
+            <h2>Base de Datos Editable: Promotores</h2>
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <input type="text" id="buscadorEditProm" placeholder="🔍 Buscar por nombre..." onkeyup="paginaActualEditProm = 1; renderGestionPromotores()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
+              <label style="margin:0; font-weight: 600;">Sección:</label>
+              <select id="filtroSeccionEditProm" onchange="paginaActualEditProm = 1; renderGestionPromotores()" style="padding: 8px; border-radius: 6px; min-width: 120px;">
+                <option value="TODAS">Mostrar Todas</option>
+              </select>
+            </div>
+            <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
+              <table class="table" style="margin: 0; width: 100%;">
+                <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
+                  <tr><th>Sección</th><th>Nombre Completo</th><th>Teléfono</th><th>Localidad</th><th>Acciones</th></tr>
+                </thead>
+                <tbody id="tablaGestionProm"></tbody>
+              </table>
+            </div>
+            <div id="paginacionEditProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
+          </section>
+
         </main>
       </div>
     </div>
@@ -244,7 +295,25 @@
     </div>
   </div>
 
-  <!-- TRUCO PARA VENCER AL CACHÉ -->
-  <script src="app.js?v=2"></script>
+  <!-- MODAL EDITAR PROMOTOR -->
+  <div id="modalEditarProm" class="modal">
+    <div class="modal-content">
+      <h3>Editar Promotor</h3>
+      <form id="formEditarProm">
+        <input type="hidden" id="editPromId">
+        <div class="form-group"><label>Nombre Completo (Nombres Apellidos):</label><input type="text" id="editPromNombre" required></div>
+        <div class="form-group"><label>Teléfono:</label><input type="text" id="editPromTelefono"></div>
+        <div class="form-group"><label>Sección:</label><input type="text" id="editPromSeccion" required></div>
+        <div class="form-group"><label>Localidad:</label><input type="text" id="editPromLocalidad"></div>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+          <button type="submit" class="btn-primary">Guardar Cambios</button>
+          <button type="button" class="btn-secondary" onclick="document.getElementById('modalEditarProm').style.display='none'">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TRUCO PARA CACHÉ -->
+  <script src="app.js?v=3"></script>
 </body>
 </html>
