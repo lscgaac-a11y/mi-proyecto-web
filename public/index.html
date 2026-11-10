@@ -76,7 +76,7 @@
               <div class="form-group">
                 <label>Rol:</label>
                 <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
-                  <option value="capturista">Capturista (Registra simpatizantes)</option>
+                  <option value="capturista">Capturista (Registra simpatizantes y promotores)</option>
                   <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
                   <option value="coordinador" id="optRolCoordinador">Coordinador (Gestiona Staff y BD)</option>
                 </select>
@@ -111,7 +111,7 @@
             <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
               <table class="table" style="margin: 0; width: 100%;">
                 <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
-                  <tr><th>Sección</th><th>Nombre</th><th>Teléfono</th><th>Referencia / Zona</th><th>Estatus</th></tr>
+                  <tr><th>Sección</th><th>Nombre</th><th>Teléfono</th><th>Promotor / Ref</th><th>Estatus</th></tr>
                 </thead>
                 <tbody id="tablaGlobalAdmin"></tbody>
               </table>
@@ -168,7 +168,11 @@
               <div class="form-group"><label>Teléfono:</label><input type="text" id="adminSimpTelefono"></div>
               <div class="form-group"><label>Sección Electoral:</label><input type="text" id="adminSimpSeccion" placeholder="Ej. 0645" required></div>
               <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="adminSimpLocalidad" required></div>
-              <div class="form-group"><label>Referencia:</label><textarea id="adminSimpReferencia" rows="2"></textarea></div>
+              <div class="form-group">
+                <label>Promotor que Invita:</label>
+                <input type="text" id="adminSimpPromotor" list="listaPromotoresAdmin" placeholder="Escribe para buscar promotor..." required>
+                <datalist id="listaPromotoresAdmin"></datalist>
+              </div>
               <button type="submit" class="btn-primary">Guardar Simpatizante</button>
             </form>
           </section>
@@ -194,35 +198,20 @@
             <div id="paginacionPaseListaGlobal" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
-          <!-- 9. NUEVA SECCIÓN: Captura de Promotor -->
+          <!-- 9. Captura de Promotor (Desde Admin) -->
           <section id="admin-captura-promotor" class="card admin-seccion" style="display: none;">
             <h2>Captura de Promotor</h2>
             <form id="formAdminPromotor">
-              <div class="form-group">
-                <label>Nombre(s):</label>
-                <input type="text" id="promNombres" placeholder="Ej. JUAN CARLOS" required>
-              </div>
-              <div class="form-group">
-                <label>Apellido Paterno y Materno:</label>
-                <input type="text" id="promApellidos" placeholder="Ej. PÉREZ LÓPEZ" required>
-              </div>
-              <div class="form-group">
-                <label>Teléfono:</label>
-                <input type="text" id="promTelefono">
-              </div>
-              <div class="form-group">
-                <label>Sección Electoral:</label>
-                <input type="text" id="promSeccion" placeholder="Ej. 0645" required>
-              </div>
-              <div class="form-group">
-                <label>Localidad / Colonia:</label>
-                <input type="text" id="promLocalidad" required>
-              </div>
+              <div class="form-group"><label>Nombre(s):</label><input type="text" id="promNombres" placeholder="Ej. JUAN CARLOS" required></div>
+              <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="promApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
+              <div class="form-group"><label>Teléfono:</label><input type="text" id="promTelefono"></div>
+              <div class="form-group"><label>Sección Electoral:</label><input type="text" id="promSeccion" placeholder="Ej. 0645" required></div>
+              <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="promLocalidad" required></div>
               <button type="submit" class="btn-primary">Guardar Promotor</button>
             </form>
           </section>
 
-          <!-- 10. NUEVA SECCIÓN: Edición de Promotores -->
+          <!-- 10. Edición de Promotores -->
           <section id="admin-gestion-promotores" class="card admin-seccion" style="display: none;">
             <h2>Base de Datos Editable: Promotores</h2>
             <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -247,18 +236,43 @@
       </div>
     </div>
 
-    <!-- VISTA 3: CAPTURISTA REGULAR -->
-    <div id="vista-capturista" style="display: none;" class="card form-centered">
-      <h2>Captura de Simpatizante</h2>
-      <form id="formSimpatizante">
-        <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="simpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
-        <div class="form-group"><label>Nombre(s):</label><input type="text" id="simpNombres" placeholder="Ej. JUAN" required></div>
-        <div class="form-group"><label>Teléfono:</label><input type="text" id="simpTelefono"></div>
-        <div class="form-group"><label>Sección Electoral:</label><input type="text" id="simpSeccion" placeholder="Ej. 0645" required></div>
-        <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="simpLocalidad" required></div>
-        <div class="form-group"><label>Referencia:</label><textarea id="simpReferencia" rows="2"></textarea></div>
-        <button type="submit" class="btn-primary">Guardar Simpatizante</button>
-      </form>
+    <!-- VISTA 3: CAPTURISTA REGULAR (ACTUALIZADA CON PESTAÑAS Y CAMPO PROMOTOR) -->
+    <div id="vista-capturista" style="display: none;" class="card">
+      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
+        <button onclick="mostrarSubvistaCapturista('subvista-simp')" id="btnTabSimp" class="btn-primary" style="flex:1;">✍️ Capturar Simpatizante</button>
+        <button onclick="mostrarSubvistaCapturista('subvista-prom')" id="btnTabProm" class="btn-secondary" style="flex:1;">👔 Capturar Promotor</button>
+      </div>
+
+      <!-- Captura Simpatizante -->
+      <div id="subvista-simp" class="form-centered" style="margin: 0 auto; max-width: 100%;">
+        <h2>Captura de Simpatizante</h2>
+        <form id="formSimpatizante">
+          <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="simpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
+          <div class="form-group"><label>Nombre(s):</label><input type="text" id="simpNombres" placeholder="Ej. JUAN" required></div>
+          <div class="form-group"><label>Teléfono:</label><input type="text" id="simpTelefono"></div>
+          <div class="form-group"><label>Sección Electoral:</label><input type="text" id="simpSeccion" placeholder="Ej. 0645" required></div>
+          <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="simpLocalidad" required></div>
+          <div class="form-group">
+            <label>Promotor que Invita:</label>
+            <input type="text" id="simpPromotor" list="listaPromotoresCapturista" placeholder="Escribe para buscar promotor..." required>
+            <datalist id="listaPromotoresCapturista"></datalist>
+          </div>
+          <button type="submit" class="btn-primary">Guardar Simpatizante</button>
+        </form>
+      </div>
+
+      <!-- Captura Promotor por Capturista -->
+      <div id="subvista-prom" class="form-centered" style="display: none; margin: 0 auto; max-width: 100%;">
+        <h2>Captura de Promotor</h2>
+        <form id="formCapturistaPromotor">
+          <div class="form-group"><label>Nombre(s):</label><input type="text" id="capPromNombres" placeholder="Ej. JUAN CARLOS" required></div>
+          <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="capPromApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
+          <div class="form-group"><label>Teléfono:</label><input type="text" id="capPromTelefono"></div>
+          <div class="form-group"><label>Sección Electoral:</label><input type="text" id="capPromSeccion" placeholder="Ej. 0645" required></div>
+          <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="capPromLocalidad" required></div>
+          <button type="submit" class="btn-primary">Guardar Promotor</button>
+        </form>
+      </div>
     </div>
 
     <!-- VISTA 4: PASE DE LISTA REGULAR -->
@@ -269,7 +283,7 @@
         <button onclick="cargarPaseDeLista()" class="btn-secondary">Recargar</button>
       </div>
       <table class="table">
-        <thead><tr><th>Nombre</th><th>Localidad</th><th>Referencia</th><th>Check In</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Localidad</th><th>Referencia / Promotor</th><th>Check In</th></tr></thead>
         <tbody id="tablaPaseLista"></tbody>
       </table>
     </div>
@@ -286,7 +300,7 @@
         <div class="form-group"><label>Teléfono:</label><input type="text" id="editSimpTelefono"></div>
         <div class="form-group"><label>Sección:</label><input type="text" id="editSimpSeccion" required></div>
         <div class="form-group"><label>Localidad:</label><input type="text" id="editSimpLocalidad"></div>
-        <div class="form-group"><label>Referencia:</label><input type="text" id="editSimpReferencia"></div>
+        <div class="form-group"><label>Promotor / Referencia:</label><input type="text" id="editSimpReferencia" required></div>
         <div style="display: flex; gap: 10px; margin-top: 15px;">
           <button type="submit" class="btn-primary">Guardar Cambios</button>
           <button type="button" class="btn-secondary" onclick="document.getElementById('modalEditarSimp').style.display='none'">Cancelar</button>
@@ -313,7 +327,6 @@
     </div>
   </div>
 
-  <!-- TRUCO PARA CACHÉ -->
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

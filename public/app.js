@@ -7,6 +7,7 @@ let globalSimpatizantesEdit = [];
 let globalStaffEdit = [];
 let globalPaseListaAdmin = [];
 let globalPromotoresEdit = [];
+let globalPromotoresLista = [];
 
 const ITEMS_POR_PAGINA = 50;
 let paginaActualLista = 1;
@@ -88,13 +89,42 @@ function redirigirPorRol() {
 
     mostrarSeccionAdmin('admin-staff'); 
     if (esAdmin) cargarAvancesAdmin();
+    cargarDatalistPromotores();
     
   } else if (usuarioActual.rol === 'capturista') {
     mostrarVista('vista-capturista');
+    mostrarSubvistaCapturista('subvista-simp');
+    cargarDatalistPromotores();
   } else if (usuarioActual.rol === 'pase_lista') {
     mostrarVista('vista-lista');
     document.getElementById('tituloSeccionLista').innerText = `Pase de Lista - Sección: ${usuarioActual.seccion_asignada}`;
     cargarPaseDeLista();
+  }
+}
+
+function mostrarSubvistaCapturista(subvistaId) {
+  document.getElementById('subvista-simp').style.display = (subvistaId === 'subvista-simp') ? 'block' : 'none';
+  document.getElementById('subvista-prom').style.display = (subvistaId === 'subvista-prom') ? 'block' : 'none';
+  
+  document.getElementById('btnTabSimp').className = (subvistaId === 'subvista-simp') ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('btnTabProm').className = (subvistaId === 'subvista-prom') ? 'btn-primary' : 'btn-secondary';
+}
+
+// Cargar la lista desplegable autocompletable de Promotores
+async function cargarDatalistPromotores() {
+  try {
+    const res = await fetch('/api/promotores');
+    globalPromotoresLista = await res.json();
+    
+    const htmlOptions = globalPromotoresLista.map(p => `<option value="${p.nombre} (Secc. ${p.seccion})"></option>`).join('');
+    
+    const dlAdmin = document.getElementById('listaPromotoresAdmin');
+    const dlCap = document.getElementById('listaPromotoresCapturista');
+    
+    if (dlAdmin) dlAdmin.innerHTML = htmlOptions;
+    if (dlCap) dlCap.innerHTML = htmlOptions;
+  } catch (error) {
+    console.error("Error al cargar datalist de promotores:", error);
   }
 }
 
@@ -171,6 +201,7 @@ function mostrarSeccionAdmin(seccionId) {
   document.getElementById(seccionId).style.display = 'block';
   document.getElementById('btn-' + seccionId).classList.add('active');
 
+  if (seccionId === 'admin-captura') cargarDatalistPromotores();
   if (seccionId === 'admin-lista') cargarListaGlobalAdmin();
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
@@ -416,6 +447,7 @@ document.getElementById('formAdminSimpatizante').addEventListener('submit', asyn
   const apellidos = document.getElementById('adminSimpApellidos').value.trim().toUpperCase();
   const nombres = document.getElementById('adminSimpNombres').value.trim().toUpperCase();
   const nombreFormatoLista = `${apellidos}, ${nombres}`;
+  const promotor = document.getElementById('adminSimpPromotor').value.trim();
 
   const res = await fetch('/api/simpatizantes', {
     method: 'POST',
@@ -425,7 +457,7 @@ document.getElementById('formAdminSimpatizante').addEventListener('submit', asyn
       telefono: document.getElementById('adminSimpTelefono').value,
       seccion: document.getElementById('adminSimpSeccion').value,
       localidad: document.getElementById('adminSimpLocalidad').value,
-      referencia: document.getElementById('adminSimpReferencia').value
+      referencia: promotor
     })
   });
   if (res.ok) {
@@ -521,12 +553,9 @@ async function guardarCheckInAdmin(id) {
 // ==========================================
 // 9. LÓGICA DE PROMOTORES
 // ==========================================
-
-// Registrar Promotor (Concatena: Nombre(s) + Apellidos)
-document.getElementById('formAdminPromotor').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const nombres = document.getElementById('promNombres').value.trim().toUpperCase();
-  const apellidos = document.getElementById('promApellidos').value.trim().toUpperCase();
+async function guardarPromotorComun(nombresId, apellidosId, telId, seccId, locId, formId) {
+  const nombres = document.getElementById(nombresId).value.trim().toUpperCase();
+  const apellidos = document.getElementById(apellidosId).value.trim().toUpperCase();
   const nombreCompleto = `${nombres} ${apellidos}`;
 
   const res = await fetch('/api/promotores', {
@@ -534,20 +563,30 @@ document.getElementById('formAdminPromotor').addEventListener('submit', async (e
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       nombre: nombreCompleto,
-      telefono: document.getElementById('promTelefono').value,
-      seccion: document.getElementById('promSeccion').value,
-      localidad: document.getElementById('promLocalidad').value
+      telefono: document.getElementById(telId).value,
+      seccion: document.getElementById(seccId).value,
+      localidad: document.getElementById(locId).value
     })
   });
   if (res.ok) {
     alert('Promotor guardado correctamente');
-    document.getElementById('formAdminPromotor').reset();
+    document.getElementById(formId).reset();
+    cargarDatalistPromotores();
   } else {
     alert('Error al guardar promotor');
   }
+}
+
+document.getElementById('formAdminPromotor').addEventListener('submit', (e) => {
+  e.preventDefault();
+  guardarPromotorComun('promNombres', 'promApellidos', 'promTelefono', 'promSeccion', 'promLocalidad', 'formAdminPromotor');
 });
 
-// Cargar y Filtrar Promotores
+document.getElementById('formCapturistaPromotor').addEventListener('submit', (e) => {
+  e.preventDefault();
+  guardarPromotorComun('capPromNombres', 'capPromApellidos', 'capPromTelefono', 'capPromSeccion', 'capPromLocalidad', 'formCapturistaPromotor');
+});
+
 async function cargarGestionPromotores() {
   const res = await fetch('/api/promotores');
   globalPromotoresEdit = await res.json();
@@ -621,23 +660,26 @@ document.getElementById('formEditarProm').addEventListener('submit', async (e) =
   });
   document.getElementById('modalEditarProm').style.display = 'none';
   cargarGestionPromotores();
+  cargarDatalistPromotores();
 });
 
 async function eliminarPromotor(id) {
   if(confirm('¿Eliminar permanentemente a este promotor?')) {
     await fetch(`/api/promotores/${id}`, { method: 'DELETE' });
     cargarGestionPromotores();
+    cargarDatalistPromotores();
   }
 }
 
 // ==========================================
-// 10. FUNCIONES DE STAFF REGULAR
+// 10. FUNCIONES DE CAPTURISTA REGULAR
 // ==========================================
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
   const apellidos = document.getElementById('simpApellidos').value.trim().toUpperCase();
   const nombres = document.getElementById('simpNombres').value.trim().toUpperCase();
   const nombreFormatoLista = `${apellidos}, ${nombres}`;
+  const promotor = document.getElementById('simpPromotor').value.trim();
 
   const res = await fetch('/api/simpatizantes', {
     method: 'POST',
@@ -647,7 +689,7 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
       telefono: document.getElementById('simpTelefono').value,
       seccion: document.getElementById('simpSeccion').value,
       localidad: document.getElementById('simpLocalidad').value,
-      referencia: document.getElementById('simpReferencia').value
+      referencia: promotor
     })
   });
   if (res.ok) {
