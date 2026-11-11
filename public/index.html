@@ -233,9 +233,9 @@
             <div id="paginacionEditProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
-          <!-- 11. NUEVA SECCIÓN: RESUMEN POR PROMOTOR -->
+          <!-- 11. RESUMEN POR PROMOTOR CON EFECTIVIDAD -->
           <section id="admin-resumen-promotor" class="card admin-seccion" style="display: none;">
-            <h2>Resumen por Promotor</h2>
+            <h2>Resumen por Promotor y Efectividad</h2>
             <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
               <input type="text" id="buscadorResumenProm" placeholder="🔍 Buscar promotor por nombre..." onkeyup="paginaActualResumenProm = 1; renderResumenPromotor()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
               <label style="margin:0; font-weight: 600;">Secc. Promotor:</label>
@@ -244,7 +244,7 @@
               </select>
             </div>
 
-            <!-- Contenedor con Scroll e Tarjetas de Promotores -->
+            <!-- Contenedor de Tarjetas de Promotores -->
             <div id="contenedorResumenPromotores" style="max-height: 500px; overflow-y: auto; padding-right: 5px;"></div>
             
             <div id="paginacionResumenProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
@@ -345,6 +345,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

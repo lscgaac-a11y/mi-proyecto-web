@@ -673,7 +673,7 @@ async function eliminarPromotor(id) {
 }
 
 // ==========================================
-// 10. RESUMEN POR PROMOTOR
+// 10. RESUMEN POR PROMOTOR Y EFECTIVIDAD
 // ==========================================
 async function cargarResumenPromotor() {
   const [resProm, resSimp] = await Promise.all([
@@ -710,7 +710,7 @@ function renderResumenPromotor() {
     contenedor.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No se encontraron promotores.</p>';
   } else {
     contenedor.innerHTML = paginados.map(p => {
-      // Filtrar simpatizantes vinculados al promotor
+      // Filtrar simpatizantes del promotor
       const simpatizantesProm = globalListaGeneral.filter(s => {
         const ref = (s.referencia || '').toLowerCase();
         return ref.includes(p.nombre.toLowerCase()) || ref.includes(`(secc. ${p.seccion})`.toLowerCase());
@@ -719,6 +719,18 @@ function renderResumenPromotor() {
       const totalSimp = simpatizantesProm.length;
       const votaronSimp = simpatizantesProm.filter(s => s.asistio).length;
 
+      // CÁLCULO DE EFECTIVIDAD (Meta: 15 Votos = 100%)
+      const metaVotos = 15;
+      const porcentajeEfectividad = ((votaronSimp / metaVotos) * 100).toFixed(1);
+
+      // Color de la insignia de efectividad
+      let estiloBadgingEfectividad = 'background: #fee2e2; color: #991b1b;'; // Bajo (<50%)
+      if (porcentajeEfectividad >= 100) {
+        estiloBadgingEfectividad = 'background: #dcfce7; color: #15803d;'; // Meta cumplida o superada (>=100%)
+      } else if (porcentajeEfectividad >= 50) {
+        estiloBadgingEfectividad = 'background: #fef9c3; color: #854d0e;'; // En avance (50%-99%)
+      }
+
       return `
         <div class="card" style="margin-bottom: 15px; border: 1px solid #cbd5e1; border-left: 5px solid #2563eb;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
@@ -726,12 +738,15 @@ function renderResumenPromotor() {
               <h3 style="margin: 0; font-size: 1.1rem; color: #1e293b;">👔 ${p.nombre}</h3>
               <small style="color: #64748b;">Sección: <strong>${p.seccion}</strong> | Localidad: ${p.localidad || '---'} | Tel: ${p.telefono || '---'}</small>
             </div>
-            <div>
-              <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; margin-right: 5px;">
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">
                 Simpatizantes: ${totalSimp}
               </span>
-              <span style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">
-                Votaron: ${votaronSimp} / ${totalSimp}
+              <span style="background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">
+                Votaron: ${votaronSimp} / 15
+              </span>
+              <span style="${estiloBadgingEfectividad} padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 0.85rem;">
+                🎯 Efectividad: ${porcentajeEfectividad}%
               </span>
             </div>
           </div>
