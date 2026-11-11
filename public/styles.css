@@ -1,207 +1,263 @@
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background-color: #f3f4f6;
+/* RESET Y BASE */
+* {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  color: #1f2937;
 }
 
-nav {
-  background-color: #1e3a8a;
-  color: white;
-  padding: 15px 20px;
-  margin-bottom: 30px;
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* CONTENEDOR PRINCIPAL RESPONSIVO */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+/* NAVBAR */
+#navbar {
+  background-color: #1e293b;
+  color: #ffffff;
+  padding: 12px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .nav-content {
-  max-width: 1000px;
-  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-nav h2 { margin: 0; font-size: 1.2rem; }
-
-.container {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px 40px 20px;
+  gap: 10px;
 }
 
+.nav-content h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* TARJETAS Y TARJETAS CENTRADAS */
 .card {
-  background: white;
-  padding: 25px;
+  background: #ffffff;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  margin-bottom: 20px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  width: 100%;
 }
 
 .form-centered {
-  max-width: 500px;
-  margin: 0 auto;
+  max-width: 450px;
+  margin: 20px auto;
 }
 
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-@media (max-width: 768px) {
-  .grid-2 { grid-template-columns: 1fr; }
-}
-
-h2, h3 { margin-top: 0; color: #111827; }
-
+/* FORMULARIOS E INPUTS */
 .form-group {
-  margin-bottom: 15px;
-  display: flex;
-  flex-direction: column;
+  margin-bottom: 14px;
 }
 
-label {
+.form-group label {
+  display: block;
   font-weight: 600;
   font-size: 0.9rem;
-  margin-bottom: 5px;
-  color: #374151;
+  margin-bottom: 4px;
+  color: #334155;
 }
 
-input, select, textarea {
-  padding: 10px;
-  border: 1px solid #d1d5db;
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 1rem;
+  background-color: #ffffff;
+  appearance: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* BOTONES RESPONSIVOS */
+.btn-primary, .btn-secondary {
+  display: inline-block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.2s;
 }
 
 .btn-primary {
   background-color: #2563eb;
-  color: white;
-  border: none;
-  padding: 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  width: 100%;
+  color: #ffffff;
 }
-.btn-primary:hover { background-color: #1d4ed8; }
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
+}
 
 .btn-secondary {
-  background-color: #4b5563;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.btn-secondary:hover { background-color: #374151; }
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
+  background-color: #e2e8f0;
+  color: #334155;
 }
 
-.table th, .table td {
-  padding: 12px;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: left;
+.btn-secondary:hover {
+  background-color: #cbd5e1;
 }
 
-.table th {
-  background-color: #f9fafb;
-  color: #4b5563;
-  font-size: 0.9rem;
-}
-
-.alert-error {
-  background-color: #fee2e2;
-  color: #991b1b;
-  padding: 10px;
-  border-radius: 6px;
-  text-align: center;
-}
-/* --- DISEÑO DEL PANEL DE ADMINISTRADOR --- */
+/* LAYOUT DEL PANEL DE ADMINISTRACIÓN */
 .admin-layout {
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .sidebar {
-  width: 250px;
-  background: white;
-  padding: 20px;
+  background: #ffffff;
+  padding: 16px;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  width: 100%;
 }
 
 .sidebar h3 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #f3f4f6;
-  padding-bottom: 10px;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  color: #1e293b;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 8px;
 }
 
 .sidebar-nav {
   list-style: none;
-  padding: 0;
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.sidebar-nav li {
-  margin-bottom: 8px;
-}
-
-.nav-btn {
+.sidebar-nav .nav-btn {
   width: 100%;
   text-align: left;
-  padding: 12px 15px;
-  background: transparent;
-  border: none;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
-  color: #4b5563;
-  transition: all 0.2s ease;
+  color: #334155;
+  cursor: pointer;
 }
 
-.nav-btn:hover {
-  background: #e5e7eb;
-  color: #111827;
-}
-
-.nav-btn.active {
-  background: #1e3a8a;
-  color: white;
+.sidebar-nav .nav-btn.active,
+.sidebar-nav .nav-btn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
   font-weight: 600;
 }
 
 .admin-content {
   flex: 1;
-  min-width: 0;
+  width: 100%;
+  min-width: 0; /* Evita desbordamientos flexbox */
 }
 
-@media (max-width: 768px) {
-  .admin-layout { flex-direction: column; }
-  .sidebar { width: 100%; }
+/* TABLAS ADAPTATIVAS CON SCROLL HORIZONTAL SEGURA */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
 }
-/* --- VENTANAS FLOTANTES (MODALES) --- */
+
+.table th, .table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.table th {
+  background-color: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+}
+
+/* ALERTAS Y MODALES */
+.alert-error {
+  background-color: #fef2f2;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  border: 1px solid #fecaca;
+}
+
 .modal {
   display: none;
   position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6);
-  align-items: center; justify-content: center;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.6);
   z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
 }
+
 .modal-content {
-  background: white;
-  padding: 25px;
+  background: #ffffff;
   border-radius: 8px;
-  width: 90%;
-  max-width: 450px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  padding: 20px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* MEDIA QUERIES PARA PANTALLAS GRANDES (ESCRITORIO / TABLETS EN HORIZONTAL) */
+@media (min-width: 768px) {
+  .container {
+    padding: 20px;
+  }
+  
+  .admin-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 70px;
+  }
+  
+  .btn-primary, .btn-secondary {
+    width: auto;
+  }
 }
