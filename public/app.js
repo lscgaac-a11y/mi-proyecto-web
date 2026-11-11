@@ -14,6 +14,7 @@ let paginaActualLista = 1;
 let paginaActualEditSimp = 1;
 let paginaActualPaseListaAdmin = 1;
 let paginaActualEditProm = 1;
+let paginaActualResumenProm = 1;
 
 // ==========================================
 // INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
@@ -110,7 +111,6 @@ function mostrarSubvistaCapturista(subvistaId) {
   document.getElementById('btnTabProm').className = (subvistaId === 'subvista-prom') ? 'btn-primary' : 'btn-secondary';
 }
 
-// Cargar la lista desplegable autocompletable de Promotores
 async function cargarDatalistPromotores() {
   try {
     const res = await fetch('/api/promotores');
@@ -207,6 +207,7 @@ function mostrarSeccionAdmin(seccionId) {
   if (seccionId === 'admin-gestion-staff') cargarGestionStaff();
   if (seccionId === 'admin-pase-lista-global') cargarPaseListaGlobalAdmin();
   if (seccionId === 'admin-gestion-promotores') cargarGestionPromotores();
+  if (seccionId === 'admin-resumen-promotor') cargarResumenPromotor();
 }
 
 function toggleSeccionAdmin() {
@@ -248,7 +249,7 @@ async function cargarAvancesAdmin() {
     `).join('');
 
     const opcionesSecciones = '<option value="TODAS">Mostrar Todas</option>' + datos.map(d => `<option value="${d.seccion}">${d.seccion}</option>`).join('');
-    ['filtroSeccionAdmin', 'filtroSeccionEditSimp', 'filtroSeccionPaseListaGlobal', 'filtroSeccionEditProm'].forEach(id => {
+    ['filtroSeccionAdmin', 'filtroSeccionEditSimp', 'filtroSeccionPaseListaGlobal', 'filtroSeccionEditProm', 'filtroSeccionResumenProm'].forEach(id => {
       const sel = document.getElementById(id);
       if(sel) { const val = sel.value; sel.innerHTML = opcionesSecciones; if(val) sel.value = val; }
     });
@@ -672,7 +673,111 @@ async function eliminarPromotor(id) {
 }
 
 // ==========================================
-// 10. FUNCIONES DE CAPTURISTA REGULAR
+// 10. RESUMEN POR PROMOTOR
+// ==========================================
+async function cargarResumenPromotor() {
+  const [resProm, resSimp] = await Promise.all([
+    fetch('/api/promotores'),
+    fetch('/api/simpatizantes-todos')
+  ]);
+  
+  globalPromotoresEdit = await resProm.json();
+  globalListaGeneral = await resSimp.json();
+  
+  paginaActualResumenProm = 1;
+  renderResumenPromotor();
+}
+
+function renderResumenPromotor() {
+  const filtroSec = document.getElementById('filtroSeccionResumenProm').value;
+  const filtroTxt = document.getElementById('buscadorResumenProm').value.toLowerCase();
+
+  let filtrados = globalPromotoresEdit.filter(p => {
+    const matchSec = (filtroSec === "TODAS" || p.seccion === filtroSec);
+    const matchTxt = p.nombre.toLowerCase().includes(filtroTxt);
+    return matchSec && matchTxt;
+  });
+
+  const totalPaginas = Math.ceil(filtrados.length / ITEMS_POR_PAGINA) || 1;
+  if (paginaActualResumenProm > totalPaginas) paginaActualResumenProm = totalPaginas;
+
+  const inicio = (paginaActualResumenProm - 1) * ITEMS_POR_PAGINA;
+  const paginados = filtrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+
+  const contenedor = document.getElementById('contenedorResumenPromotores');
+  
+  if (paginados.length === 0) {
+    contenedor.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No se encontraron promotores.</p>';
+  } else {
+    contenedor.innerHTML = paginados.map(p => {
+      // Filtrar simpatizantes vinculados al promotor
+      const simpatizantesProm = globalListaGeneral.filter(s => {
+        const ref = (s.referencia || '').toLowerCase();
+        return ref.includes(p.nombre.toLowerCase()) || ref.includes(`(secc. ${p.seccion})`.toLowerCase());
+      });
+
+      const totalSimp = simpatizantesProm.length;
+      const votaronSimp = simpatizantesProm.filter(s => s.asistio).length;
+
+      return `
+        <div class="card" style="margin-bottom: 15px; border: 1px solid #cbd5e1; border-left: 5px solid #2563eb;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.1rem; color: #1e293b;">👔 ${p.nombre}</h3>
+              <small style="color: #64748b;">Sección: <strong>${p.seccion}</strong> | Localidad: ${p.localidad || '---'} | Tel: ${p.telefono || '---'}</small>
+            </div>
+            <div>
+              <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; margin-right: 5px;">
+                Simpatizantes: ${totalSimp}
+              </span>
+              <span style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">
+                Votaron: ${votaronSimp} / ${totalSimp}
+              </span>
+            </div>
+          </div>
+          
+          ${totalSimp > 0 ? `
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px;">
+              <table class="table" style="margin: 0; font-size: 0.85rem;">
+                <thead style="position: sticky; top: 0; background: #f8fafc;">
+                  <tr><th>Sección</th><th>Nombre Simpatizante</th><th>Teléfono</th><th>Estatus</th></tr>
+                </thead>
+                <tbody>
+                  ${simpatizantesProm.map(s => `
+                    <tr>
+                      <td>${s.seccion}</td>
+                      <td><strong>${s.nombre}</strong></td>
+                      <td>${s.telefono || '---'}</td>
+                      <td>
+                        ${s.asistio 
+                          ? '<span style="color: #166534; font-weight: bold;">✅ Ya Votó</span>' 
+                          : '<span style="color: #991b1b; font-weight: bold;">⏳ Pendiente</span>'}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #94a3b8; font-style: italic;">Sin simpatizantes registrados aún.</p>'}
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('paginacionResumenProm').innerHTML = `
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualResumenProm === 1 ? '0.5' : '1'}; pointer-events: ${paginaActualResumenProm === 1 ? 'none' : 'auto'};" onclick="cambiarPaginaResumenProm(-1)">⬅️ Anterior</button>
+    <span style="font-weight: 600; font-size: 0.9rem;">Página ${paginaActualResumenProm} de ${totalPaginas} <br><small style="color: #64748b; font-weight: normal;">(${filtrados.length} resultados)</small></span>
+    <button class="btn-secondary" style="padding: 6px 12px; opacity: ${paginaActualResumenProm === totalPaginas ? '0.5' : '1'}; pointer-events: ${paginaActualResumenProm === totalPaginas ? 'none' : 'auto'};" onclick="cambiarPaginaResumenProm(1)">Siguiente ➡️</button>
+  `;
+}
+
+function cambiarPaginaResumenProm(delta) {
+  paginaActualResumenProm += delta;
+  renderResumenPromotor();
+}
+
+// ==========================================
+// 11. FUNCIONES DE CAPTURISTA REGULAR
 // ==========================================
 document.getElementById('formSimpatizante').addEventListener('submit', async (e) => {
   e.preventDefault();
