@@ -300,10 +300,12 @@
         <input type="text" id="buscadorLista" placeholder="🔍 Buscar por nombre..." onkeyup="filtrarLista()" style="flex: 1;">
         <button onclick="cargarPaseDeLista()" class="btn-secondary">Recargar</button>
       </div>
-      <table class="table">
-        <thead><tr><th>Nombre</th><th>Localidad</th><th>Referencia / Promotor</th><th>Check In</th></tr></thead>
-        <tbody id="tablaPaseLista"></tbody>
-      </table>
+      <div style="overflow-x: auto;">
+        <table class="table">
+          <thead><tr><th>Nombre</th><th>Localidad</th><th>Referencia / Promotor</th><th>Check In</th></tr></thead>
+          <tbody id="tablaPaseLista"></tbody>
+        </table>
+      </div>
     </div>
 
   </div>
@@ -345,6 +347,6 @@
     </div>
   </div>
 
- <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

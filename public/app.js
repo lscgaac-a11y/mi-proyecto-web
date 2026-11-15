@@ -675,6 +675,14 @@ async function eliminarPromotor(id) {
 // ==========================================
 // 10. RESUMEN POR PROMOTOR Y EFECTIVIDAD
 // ==========================================
+function normalizarTexto(texto) {
+  return (texto || '')
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 async function cargarResumenPromotor() {
   const [resProm, resSimp] = await Promise.all([
     fetch('/api/promotores'),
@@ -690,11 +698,11 @@ async function cargarResumenPromotor() {
 
 function renderResumenPromotor() {
   const filtroSec = document.getElementById('filtroSeccionResumenProm').value;
-  const filtroTxt = document.getElementById('buscadorResumenProm').value.toLowerCase();
+  const filtroTxt = normalizarTexto(document.getElementById('buscadorResumenProm').value);
 
   let filtrados = globalPromotoresEdit.filter(p => {
     const matchSec = (filtroSec === "TODAS" || p.seccion === filtroSec);
-    const matchTxt = p.nombre.toLowerCase().includes(filtroTxt);
+    const matchTxt = normalizarTexto(p.nombre).includes(filtroTxt);
     return matchSec && matchTxt;
   });
 
@@ -710,10 +718,15 @@ function renderResumenPromotor() {
     contenedor.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No se encontraron promotores.</p>';
   } else {
     contenedor.innerHTML = paginados.map(p => {
-      // Filtrar simpatizantes del promotor
+      const nombrePromotorNorm = normalizarTexto(p.nombre);
+
+      // Filtrar ÚNICAMENTE simpatizantes cuya referencia contenga el nombre exacto del promotor
       const simpatizantesProm = globalListaGeneral.filter(s => {
-        const ref = (s.referencia || '').toLowerCase();
-        return ref.includes(p.nombre.toLowerCase()) || ref.includes(`(secc. ${p.seccion})`.toLowerCase());
+        const refNorm = normalizarTexto(s.referencia);
+        if (!refNorm || !nombrePromotorNorm) return false;
+        
+        const refSoloNombre = refNorm.replace(/\(secc\..*?\)/g, '').trim();
+        return refSoloNombre === nombrePromotorNorm || refNorm.includes(nombrePromotorNorm);
       });
 
       const totalSimp = simpatizantesProm.length;
@@ -723,12 +736,11 @@ function renderResumenPromotor() {
       const metaVotos = 15;
       const porcentajeEfectividad = ((votaronSimp / metaVotos) * 100).toFixed(1);
 
-      // Color de la insignia de efectividad
-      let estiloBadgingEfectividad = 'background: #fee2e2; color: #991b1b;'; // Bajo (<50%)
+      let estiloBadgingEfectividad = 'background: #fee2e2; color: #991b1b;';
       if (porcentajeEfectividad >= 100) {
-        estiloBadgingEfectividad = 'background: #dcfce7; color: #15803d;'; // Meta cumplida o superada (>=100%)
+        estiloBadgingEfectividad = 'background: #dcfce7; color: #15803d;';
       } else if (porcentajeEfectividad >= 50) {
-        estiloBadgingEfectividad = 'background: #fef9c3; color: #854d0e;'; // En avance (50%-99%)
+        estiloBadgingEfectividad = 'background: #fef9c3; color: #854d0e;';
       }
 
       return `
@@ -752,7 +764,7 @@ function renderResumenPromotor() {
           </div>
           
           ${totalSimp > 0 ? `
-            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px;">
+            <div style="max-height: 200px; overflow-y: auto; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px;">
               <table class="table" style="margin: 0; font-size: 0.85rem;">
                 <thead style="position: sticky; top: 0; background: #f8fafc;">
                   <tr><th>Sección</th><th>Nombre Simpatizante</th><th>Teléfono</th><th>Estatus</th></tr>

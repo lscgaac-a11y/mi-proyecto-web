@@ -183,7 +183,7 @@ body {
 .admin-content {
   flex: 1;
   width: 100%;
-  min-width: 0; /* Evita desbordamientos flexbox */
+  min-width: 0;
 }
 
 /* TABLAS ADAPTATIVAS CON SCROLL HORIZONTAL SEGURA */
