@@ -6,6 +6,10 @@
   <title>Sistema Electoral y Simpatizantes</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Librerías para Excel y PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -61,6 +65,7 @@
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-simp')" class="nav-btn" id="btn-admin-gestion-simp">📝 Editar Simpatizantes</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-promotores')" class="nav-btn" id="btn-admin-gestion-promotores">👔 Editar Promotores</button></li>
             <li><button onclick="mostrarSeccionAdmin('admin-gestion-staff')" class="nav-btn" id="btn-admin-gestion-staff">⚙️ Editar Staff</button></li>
+            <li><button onclick="mostrarSeccionAdmin('admin-exportar-importar')" class="nav-btn" id="btn-admin-exportar-importar">💾 Exportar / Importar BD</button></li>
           </ul>
           <button onclick="cargarAvancesAdmin()" id="btn-admin-actualizar" class="btn-secondary" style="width: 100%; margin-top: 20px;">🔄 Actualizar Datos</button>
         </aside>
@@ -244,10 +249,76 @@
               </select>
             </div>
 
-            <!-- Contenedor de Tarjetas de Promotores -->
             <div id="contenedorResumenPromotores" style="max-height: 500px; overflow-y: auto; padding-right: 5px;"></div>
             
             <div id="paginacionResumenProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
+          </section>
+
+          <!-- 12. NUEVA SECCIÓN: EXPORTAR E IMPORTAR BASE DE DATOS -->
+          <section id="admin-exportar-importar" class="card admin-seccion" style="display: none;">
+            <h2>💾 Exportar e Importar Base de Datos</h2>
+            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 20px;">
+              Descarga respaldos completos en formato Excel o reportes listos para imprimir en PDF, o carga registros masivos desde una hoja de cálculo.
+            </p>
+
+            <!-- BLOQUE EXPORTAR -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+              <h3 style="margin-bottom: 12px; color: #1e293b;">📤 Exportar Datos</h3>
+              
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                <!-- Excel Simpatizantes -->
+                <button onclick="exportarSimpatizantesExcel()" class="btn-primary" style="background: #16a34a;">
+                  📗 Simpatizantes (Excel)
+                </button>
+                <!-- PDF Simpatizantes -->
+                <button onclick="exportarSimpatizantesPDF()" class="btn-primary" style="background: #dc2626;">
+                  📕 Simpatizantes (PDF)
+                </button>
+                <!-- Excel Promotores -->
+                <button onclick="exportarPromotoresExcel()" class="btn-primary" style="background: #15803d;">
+                  📗 Promotores (Excel)
+                </button>
+                <!-- PDF Promotores + Efectividad -->
+                <button onclick="exportarPromotoresPDF()" class="btn-primary" style="background: #b91c1c;">
+                  📕 Promotores y Efectividad (PDF)
+                </button>
+              </div>
+            </div>
+
+            <!-- BLOQUE IMPORTAR -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+              <h3 style="margin-bottom: 8px; color: #1e293b;">📥 Importar desde Excel (.xlsx / .csv)</h3>
+              <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 14px;">
+                El archivo Excel debe respetar los encabezados de columna exactos. Puedes descargar una plantilla vacía para llenarla fácilmente:
+              </p>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px;">
+                <button onclick="descargarPlantillaSimpatizantes()" class="btn-secondary" style="font-size: 0.85rem;">
+                  📄 Descargar Plantilla Simpatizantes
+                </button>
+                <button onclick="descargarPlantillaPromotores()" class="btn-secondary" style="font-size: 0.85rem;">
+                  📄 Descargar Plantilla Promotores
+                </button>
+              </div>
+
+              <!-- Subir Simpatizantes -->
+              <div style="border-top: 1px solid #cbd5e1; padding-top: 14px; margin-bottom: 14px;">
+                <label style="font-weight: 600; display: block; margin-bottom: 6px;">1. Importar Simpatizantes (Columnas: <code>nombre, telefono, seccion, localidad, referencia</code>):</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                  <input type="file" id="archivoExcelSimpatizantes" accept=".xlsx, .xls, .csv" style="flex: 1; background: white; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                  <button onclick="importarExcel('simpatizantes')" class="btn-primary">⬆️ Subir Simpatizantes</button>
+                </div>
+              </div>
+
+              <!-- Subir Promotores -->
+              <div style="border-top: 1px solid #cbd5e1; padding-top: 14px;">
+                <label style="font-weight: 600; display: block; margin-bottom: 6px;">2. Importar Promotores (Columnas: <code>nombre, telefono, seccion, localidad</code>):</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                  <input type="file" id="archivoExcelPromotores" accept=".xlsx, .xls, .csv" style="flex: 1; background: white; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                  <button onclick="importarExcel('promotores')" class="btn-primary">⬆️ Subir Promotores</button>
+                </div>
+              </div>
+            </div>
           </section>
 
         </main>
@@ -347,6 +418,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

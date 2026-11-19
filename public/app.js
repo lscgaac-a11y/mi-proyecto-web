@@ -885,5 +885,266 @@ function filtrarLista() {
   }
 }
 
+// ==========================================
+// 12. EXPORTAR E IMPORTAR BASE DE DATOS (EXCEL Y PDF)
+// ==========================================
+function obtenerFechaHoy() {
+  return new Date().toISOString().split('T')[0];
+}
+
+// EXPORTAR SIMPATIZANTES A EXCEL
+async function exportarSimpatizantesExcel() {
+  try {
+    const res = await fetch('/api/simpatizantes-todos');
+    const datos = await res.json();
+
+    if (datos.length === 0) return alert('No hay simpatizantes para exportar.');
+
+    const filas = datos.map(s => ({
+      'ID': s.id,
+      'Sección': s.seccion,
+      'Nombre Completo': s.nombre,
+      'Teléfono': s.telefono || '',
+      'Localidad': s.localidad || '',
+      'Promotor / Referencia': s.referencia || '',
+      'Estatus Voto': s.asistio ? 'YA VOTÓ' : 'PENDIENTE'
+    }));
+
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Simpatizantes');
+    XLSX.writeFile(libro, `Simpatizantes_${obtenerFechaHoy()}.xlsx`);
+  } catch (error) {
+    alert('Error al generar archivo Excel.');
+  }
+}
+
+// EXPORTAR SIMPATIZANTES A PDF
+async function exportarSimpatizantesPDF() {
+  try {
+    const res = await fetch('/api/simpatizantes-todos');
+    const datos = await res.json();
+
+    if (datos.length === 0) return alert('No hay simpatizantes para exportar.');
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape');
+
+    doc.setFontSize(16);
+    doc.text('Listado General de Simpatizantes', 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Fecha de generación: ${obtenerFechaHoy()} | Total registros: ${datos.length}`, 14, 22);
+
+    const columnas = ['Secc.', 'Nombre Completo', 'Teléfono', 'Localidad', 'Promotor / Ref', 'Estatus'];
+    const filas = datos.map(s => [
+      s.seccion,
+      s.nombre,
+      s.telefono || '---',
+      s.localidad || '---',
+      s.referencia || '---',
+      s.asistio ? 'YA VOTÓ' : 'PENDIENTE'
+    ]);
+
+    doc.autoTable({
+      head: [columnas],
+      body: filas,
+      startY: 28,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [37, 99, 235] }
+    });
+
+    doc.save(`Simpatizantes_${obtenerFechaHoy()}.pdf`);
+  } catch (error) {
+    alert('Error al generar archivo PDF.');
+  }
+}
+
+// EXPORTAR PROMOTORES A EXCEL
+async function exportarPromotoresExcel() {
+  try {
+    const [resProm, resSimp] = await Promise.all([
+      fetch('/api/promotores'),
+      fetch('/api/simpatizantes-todos')
+    ]);
+    const promotores = await resProm.json();
+    const simpatizantes = await resSimp.json();
+
+    if (promotores.length === 0) return alert('No hay promotores para exportar.');
+
+    const filas = promotores.map(p => {
+      const nomNorm = normalizarTexto(p.nombre);
+      const simpProm = simpatizantes.filter(s => {
+        const refNorm = normalizarTexto(s.referencia);
+        const refSoloNombre = refNorm.replace(/\(secc\..*?\)/g, '').trim();
+        return refSoloNombre === nomNorm || refNorm.includes(nomNorm);
+      });
+      const votaron = simpProm.filter(s => s.asistio).length;
+      const efectividad = ((votaron / 15) * 100).toFixed(1) + '%';
+
+      return {
+        'ID': p.id,
+        'Sección': p.seccion,
+        'Nombre Promotor': p.nombre,
+        'Teléfono': p.telefono || '',
+        'Localidad': p.localidad || '',
+        'Total Simpatizantes': simpProm.length,
+        'Ya Votaron': votaron,
+        'Efectividad (Meta 15)': efectividad
+      };
+    });
+
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Promotores');
+    XLSX.writeFile(libro, `Promotores_${obtenerFechaHoy()}.xlsx`);
+  } catch (error) {
+    alert('Error al generar archivo Excel de promotores.');
+  }
+}
+
+// EXPORTAR PROMOTORES Y EFECTIVIDAD A PDF
+async function exportarPromotoresPDF() {
+  try {
+    const [resProm, resSimp] = await Promise.all([
+      fetch('/api/promotores'),
+      fetch('/api/simpatizantes-todos')
+    ]);
+    const promotores = await resProm.json();
+    const simpatizantes = await resSimp.json();
+
+    if (promotores.length === 0) return alert('No hay promotores para exportar.');
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text('Reporte de Promotores y Efectividad', 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${obtenerFechaHoy()} | Meta por promotor: 15 votos = 100%`, 14, 22);
+
+    const columnas = ['Secc.', 'Promotor', 'Localidad', 'Simp.', 'Votaron', 'Efectividad'];
+    const filas = promotores.map(p => {
+      const nomNorm = normalizarTexto(p.nombre);
+      const simpProm = simpatizantes.filter(s => {
+        const refNorm = normalizarTexto(s.referencia);
+        const refSoloNombre = refNorm.replace(/\(secc\..*?\)/g, '').trim();
+        return refSoloNombre === nomNorm || refNorm.includes(nomNorm);
+      });
+      const votaron = simpProm.filter(s => s.asistio).length;
+      const efectividad = ((votaron / 15) * 100).toFixed(1) + '%';
+
+      return [p.seccion, p.nombre, p.localidad || '---', simpProm.length, `${votaron} / 15`, efectividad];
+    });
+
+    doc.autoTable({
+      head: [columnas],
+      body: filas,
+      startY: 28,
+      styles: { fontSize: 8.5 },
+      headStyles: { fillColor: [22, 163, 74] }
+    });
+
+    doc.save(`Promotores_Efectividad_${obtenerFechaHoy()}.pdf`);
+  } catch (error) {
+    alert('Error al generar PDF de promotores.');
+  }
+}
+
+// DESCARGAR PLANTILLAS MODELO DE EXCEL
+function descargarPlantillaSimpatizantes() {
+  const ejemplo = [
+    { nombre: 'PEREZ LOPEZ, JUAN', telefono: '9141000000', seccion: '0645', localidad: 'CENTRO', referencia: 'CARLOS RUIZ (Secc. 0645)' }
+  ];
+  const hoja = XLSX.utils.json_to_sheet(ejemplo);
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Plantilla_Simpatizantes');
+  XLSX.writeFile(libro, 'Plantilla_Importar_Simpatizantes.xlsx');
+}
+
+function descargarPlantillaPromotores() {
+  const ejemplo = [
+    { nombre: 'CARLOS RUIZ', telefono: '9141000000', seccion: '0645', localidad: 'CENTRO' }
+  ];
+  const hoja = XLSX.utils.json_to_sheet(ejemplo);
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Plantilla_Promotores');
+  XLSX.writeFile(libro, 'Plantilla_Importar_Promotores.xlsx');
+}
+
+// IMPORTAR EXCEL HACIA LA BASE DE DATOS
+function importarExcel(tipo) {
+  const inputId = tipo === 'simpatizantes' ? 'archivoExcelSimpatizantes' : 'archivoExcelPromotores';
+  const input = document.getElementById(inputId);
+  const archivo = input.files[0];
+
+  if (!archivo) {
+    alert('⚠️ Por favor selecciona primero un archivo Excel (.xlsx o .csv).');
+    return;
+  }
+
+  const lector = new FileReader();
+  lector.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const primeraHoja = workbook.SheetNames[0];
+      const filasCrudas = XLSX.utils.sheet_to_json(workbook.Sheets[primeraHoja]);
+
+      if (filasCrudas.length === 0) {
+        alert('El archivo Excel está vacío.');
+        return;
+      }
+
+      // Normalizar nombres de columnas (acepta mayúsculas, minúsculas o acentos)
+      const registros = filasCrudas.map(fila => {
+        const obj = {};
+        for (const clave in fila) {
+          const k = normalizarTexto(clave);
+          if (k.includes('nombre')) obj.nombre = fila[clave];
+          if (k.includes('tel')) obj.telefono = fila[clave];
+          if (k.includes('secc')) obj.seccion = fila[clave];
+          if (k.includes('localidad') || k.includes('colonia')) obj.localidad = fila[clave];
+          if (k.includes('ref') || k.includes('promotor')) obj.referencia = fila[clave];
+          if (k.includes('estatus') || k.includes('voto') || k.includes('asistio')) {
+            const val = normalizarTexto(String(fila[clave]));
+            obj.asistio = (val === 'true' || val === '1' || val === 'si' || val.includes('voto'));
+          }
+        }
+        return obj;
+      }).filter(r => r.nombre && r.seccion);
+
+      if (registros.length === 0) {
+        alert('❌ No se encontraron filas válidas. Verifica que existan las columnas "nombre" y "seccion".');
+        return;
+      }
+
+      if (!confirm(`Se detectaron ${registros.length} registros válidos para importar. ¿Deseas guardarlos en la base de datos?`)) {
+        return;
+      }
+
+      const endpoint = tipo === 'simpatizantes' ? '/api/simpatizantes/importar' : '/api/promotores/importar';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registros })
+      });
+
+      const resultado = await res.json();
+      if (res.ok) {
+        alert(`✅ ${resultado.mensaje}`);
+        input.value = '';
+        if (usuarioActual.rol === 'admin') cargarAvancesAdmin();
+        cargarDatalistPromotores();
+      } else {
+        alert(`❌ Error: ${resultado.error}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error al leer el archivo. Asegúrate de que sea un Excel válido.');
+    }
+  };
+  lector.readAsArrayBuffer(archivo);
+}
+
 // ARRANQUE DE APLICACIÓN
 iniciarApp();

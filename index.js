@@ -11,7 +11,8 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-app.use(express.json());
+// Aumentar límite a 10MB para soportar importación masiva desde Excel
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Inicializar Tablas
@@ -29,7 +30,6 @@ async function iniciarBaseDeDatos() {
       );
     `);
 
-    // Intentar agregar columna requiere_cambio por si la tabla ya existía previamente sin ella
     try {
       await pool.query("ALTER TABLE usuarios ADD COLUMN requiere_cambio BOOLEAN DEFAULT TRUE;");
     } catch (e) { /* Columna ya existe */ }
@@ -48,7 +48,7 @@ async function iniciarBaseDeDatos() {
       );
     `);
 
-    // 3. NUEVA TABLA: Promotores
+    // 3. Tabla Promotores
     await pool.query(`
       CREATE TABLE IF NOT EXISTS promotores (
         id SERIAL PRIMARY KEY,
@@ -134,7 +134,7 @@ app.post('/api/simpatizantes', async (req, res) => {
   }
 });
 
-// 5. Obtener Simpatizantes por Sección (Pase de Lista local)
+// 5. Obtener Simpatizantes por Sección
 app.get('/api/simpatizantes/:seccion', async (req, res) => {
   try {
     const simpatizantes = await pool.query(
@@ -225,8 +225,6 @@ app.delete('/api/simpatizantes/:id', async (req, res) => {
 // ==========================================
 // 11. RUTAS PARA LA ENTIDAD: PROMOTORES
 // ==========================================
-
-// Obtener todos los promotores
 app.get('/api/promotores', async (req, res) => {
   try {
     const resultado = await pool.query('SELECT * FROM promotores ORDER BY seccion ASC, nombre ASC');
@@ -236,7 +234,6 @@ app.get('/api/promotores', async (req, res) => {
   }
 });
 
-// Registrar un promotor
 app.post('/api/promotores', async (req, res) => {
   const { nombre, telefono, seccion, localidad } = req.body;
   try {
@@ -250,7 +247,6 @@ app.post('/api/promotores', async (req, res) => {
   }
 });
 
-// Editar un promotor
 app.patch('/api/promotores/:id/editar', async (req, res) => {
   const { id } = req.params;
   const { nombre, telefono, seccion, localidad } = req.body;
@@ -265,13 +261,91 @@ app.patch('/api/promotores/:id/editar', async (req, res) => {
   }
 });
 
-// Eliminar un promotor
 app.delete('/api/promotores/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM promotores WHERE id = $1', [req.params.id]);
     res.json({ mensaje: 'Promotor eliminado correctamente' });
   } catch (error) {
     res.status(500).json({ error: 'Error al eliminar promotor' });
+  }
+});
+
+// ==========================================
+// 12. IMPORTACIÓN MASIVA DESDE EXCEL
+// ==========================================
+app.post('/api/simpatizantes/importar', async (req, res) => {
+  const { registros } = req.body;
+  if (!Array.isArray(registros) || registros.length === 0) {
+    return res.status(400).json({ error: 'No se recibieron registros válidos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let insertados = 0;
+
+    for (const r of registros) {
+      if (r.nombre && r.seccion) {
+        await client.query(
+          'INSERT INTO simpatizantes (nombre, telefono, seccion, localidad, referencia, asistio) VALUES ($1, $2, $3, $4, $5, $6)',
+          [
+            String(r.nombre).trim().toUpperCase(),
+            r.telefono ? String(r.telefono).trim() : '',
+            String(r.seccion).trim(),
+            r.localidad ? String(r.localidad).trim().toUpperCase() : '',
+            r.referencia ? String(r.referencia).trim().toUpperCase() : '',
+            Boolean(r.asistio)
+          ]
+        );
+        insertados++;
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ mensaje: `Se importaron ${insertados} simpatizantes correctamente.` });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al importar simpatizantes:', error);
+    res.status(500).json({ error: 'Error al procesar la importación en la base de datos.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/promotores/importar', async (req, res) => {
+  const { registros } = req.body;
+  if (!Array.isArray(registros) || registros.length === 0) {
+    return res.status(400).json({ error: 'No se recibieron registros válidos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let insertados = 0;
+
+    for (const r of registros) {
+      if (r.nombre && r.seccion) {
+        await client.query(
+          'INSERT INTO promotores (nombre, telefono, seccion, localidad) VALUES ($1, $2, $3, $4)',
+          [
+            String(r.nombre).trim().toUpperCase(),
+            r.telefono ? String(r.telefono).trim() : '',
+            String(r.seccion).trim(),
+            r.localidad ? String(r.localidad).trim().toUpperCase() : ''
+          ]
+        );
+        insertados++;
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ mensaje: `Se importaron ${insertados} promotores correctamente.` });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al importar promotores:', error);
+    res.status(500).json({ error: 'Error al procesar la importación en la base de datos.' });
+  } finally {
+    client.release();
   }
 });
 
