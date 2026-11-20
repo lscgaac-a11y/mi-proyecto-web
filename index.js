@@ -5,17 +5,38 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de la conexión a PostgreSQL (Render proporciona DATABASE_URL)
+// Desactivar cabecera innecesaria para reducir peso en respuestas
+app.disable('x-powered-by');
+
+// ==========================================
+// POOL DE CONEXIONES OPTIMIZADO (400 USUARIOS)
+// ==========================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  max: parseInt(process.env.DB_POOL_MAX, 10) || 20, // Hasta 20 conexiones activas simultáneas
+  idleTimeoutMillis: 30000, // Libera conexiones inactivas tras 30 segundos
+  connectionTimeoutMillis: 5000, // Falla rápido en 5s si la BD está saturada en lugar de colgar peticiones
+  allowExitOnIdle: false
+});
+
+// Evita que un corte momentáneo de red en PostgreSQL derribe el servidor Node.js
+pool.on('error', (err) => {
+  console.error('⚠️ Error inesperado en cliente inactivo de PostgreSQL:', err.message);
 });
 
 // Aumentar límite a 10MB para soportar importación masiva desde Excel
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Inicializar Tablas
+// Caché en navegador para archivos estáticos (evita descargas repetidas con 400 usuarios)
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1h',
+  etag: true
+}));
+
+// ==========================================
+// INICIALIZAR TABLAS E ÍNDICES EN POSTGRESQL
+// ==========================================
 async function iniciarBaseDeDatos() {
   try {
     // 1. Tabla Usuarios
@@ -60,15 +81,36 @@ async function iniciarBaseDeDatos() {
       );
     `);
 
+    // 4. ÍNDICES DE ALTO RENDIMIENTO PARA CONSULTAS Y ORDENAMIENTO
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_simpatizantes_seccion_nombre 
+      ON simpatizantes (seccion, nombre);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_simpatizantes_asistio 
+      ON simpatizantes (asistio);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_promotores_seccion_nombre 
+      ON promotores (seccion, nombre);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_usuarios_login 
+      ON usuarios (usuario, password);
+    `);
+
     // Crear admin por defecto si no existe
-    const adminCheck = await pool.query("SELECT * FROM usuarios WHERE rol = 'admin'");
+    const adminCheck = await pool.query("SELECT id FROM usuarios WHERE rol = 'admin' LIMIT 1");
     if (adminCheck.rows.length === 0) {
       await pool.query(
         "INSERT INTO usuarios (usuario, password, rol, requiere_cambio) VALUES ($1, $2, $3, $4)",
         ['admin', 'admin123', 'admin', false]
       );
     }
-    console.log('✅ Base de datos e inicialización completadas.');
+    console.log('✅ Base de datos, pool de conexiones e índices optimizados listos.');
   } catch (error) {
     console.error('❌ Error al inicializar base de datos:', error.message);
   }
@@ -138,7 +180,7 @@ app.post('/api/simpatizantes', async (req, res) => {
 app.get('/api/simpatizantes/:seccion', async (req, res) => {
   try {
     const simpatizantes = await pool.query(
-      'SELECT * FROM simpatizantes WHERE seccion = $1 ORDER BY nombre ASC',
+      'SELECT id, nombre, telefono, seccion, localidad, referencia, asistio FROM simpatizantes WHERE seccion = $1 ORDER BY nombre ASC',
       [req.params.seccion]
     );
     res.json(simpatizantes.rows);
@@ -150,7 +192,9 @@ app.get('/api/simpatizantes/:seccion', async (req, res) => {
 // 6. Obtener Todos los Simpatizantes
 app.get('/api/simpatizantes-todos', async (req, res) => {
   try {
-    const todos = await pool.query('SELECT * FROM simpatizantes ORDER BY seccion ASC, nombre ASC');
+    const todos = await pool.query(
+      'SELECT id, nombre, telefono, seccion, localidad, referencia, asistio FROM simpatizantes ORDER BY seccion ASC, nombre ASC'
+    );
     res.json(todos.rows);
   } catch (error) {
     res.status(500).json({ error: 'Error al consultar todos los simpatizantes' });
@@ -227,7 +271,9 @@ app.delete('/api/simpatizantes/:id', async (req, res) => {
 // ==========================================
 app.get('/api/promotores', async (req, res) => {
   try {
-    const resultado = await pool.query('SELECT * FROM promotores ORDER BY seccion ASC, nombre ASC');
+    const resultado = await pool.query(
+      'SELECT id, nombre, telefono, seccion, localidad FROM promotores ORDER BY seccion ASC, nombre ASC'
+    );
     res.json(resultado.rows);
   } catch (error) {
     res.status(500).json({ error: 'Error al consultar promotores' });
@@ -349,6 +395,13 @@ app.post('/api/promotores/importar', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+// ==========================================
+// ARRANQUE DEL SERVIDOR Y TIMEOUTS PARA RENDER
+// ==========================================
+const server = app.listen(PORT, () => {
   console.log(`🚀 Servidor ejecutándose en el puerto ${PORT}`);
 });
+
+// Evita desconexiones prematuras del proxy inverso de Render bajo alta carga
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
