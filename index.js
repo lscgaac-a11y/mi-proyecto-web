@@ -5,8 +5,15 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Desactivar cabecera innecesaria para reducir peso en respuestas
 app.disable('x-powered-by');
+
+// 60 Secciones Electorales Oficiales de Cunduacán, Tabasco
+// (0609 a 0653, 0655 a 0667, más 1202 y 1203 por división de la 0654)
+const SECCIONES_CUNDUACAN = [
+  ...Array.from({ length: 59 }, (_, i) => String(609 + i).padStart(4, '0')).filter(s => s !== '0654'),
+  '1202',
+  '1203'
+];
 
 // ==========================================
 // POOL DE CONEXIONES OPTIMIZADO (400 USUARIOS)
@@ -14,21 +21,18 @@ app.disable('x-powered-by');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
-  max: parseInt(process.env.DB_POOL_MAX, 10) || 20, // Hasta 20 conexiones activas simultáneas
-  idleTimeoutMillis: 30000, // Libera conexiones inactivas tras 30 segundos
-  connectionTimeoutMillis: 5000, // Falla rápido en 5s si la BD está saturada en lugar de colgar peticiones
+  max: parseInt(process.env.DB_POOL_MAX, 10) || 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
   allowExitOnIdle: false
 });
 
-// Evita que un corte momentáneo de red en PostgreSQL derribe el servidor Node.js
 pool.on('error', (err) => {
   console.error('⚠️ Error inesperado en cliente inactivo de PostgreSQL:', err.message);
 });
 
-// Aumentar límite a 10MB para soportar importación masiva desde Excel
 app.use(express.json({ limit: '10mb' }));
 
-// Caché en navegador para archivos estáticos (evita descargas repetidas con 400 usuarios)
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '1h',
   etag: true
@@ -81,7 +85,23 @@ async function iniciarBaseDeDatos() {
       );
     `);
 
-    // 4. ÍNDICES DE ALTO RENDIMIENTO PARA CONSULTAS Y ORDENAMIENTO
+    // 4. Tabla Estructura Principal (20 Zonas, 37 Rutas, 60 Secciones)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS estructura_principal (
+        id SERIAL PRIMARY KEY,
+        rol VARCHAR(50) NOT NULL,
+        zona INTEGER,
+        ruta INTEGER,
+        seccion VARCHAR(20),
+        nombres VARCHAR(100) NOT NULL,
+        apellidos VARCHAR(100) NOT NULL,
+        telefono VARCHAR(20),
+        localidad VARCHAR(100),
+        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 5. ÍNDICES DE ALTO RENDIMIENTO
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_simpatizantes_seccion_nombre 
       ON simpatizantes (seccion, nombre);
@@ -100,6 +120,11 @@ async function iniciarBaseDeDatos() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_usuarios_login 
       ON usuarios (usuario, password);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_estructura_rol_zona_ruta 
+      ON estructura_principal (rol, zona, ruta, seccion);
     `);
 
     // Crear admin por defecto si no existe
@@ -396,12 +421,205 @@ app.post('/api/promotores/importar', async (req, res) => {
 });
 
 // ==========================================
+// 13. RUTAS DE ESTRUCTURA PRINCIPAL (20 ZONAS, 37 RUTAS, 60 SECCIONES)
+// ==========================================
+app.get('/api/estructura', async (req, res) => {
+  try {
+    const resultado = await pool.query(`
+      SELECT id, rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad
+      FROM estructura_principal
+      ORDER BY 
+        CASE rol
+          WHEN 'Coordinador de Zona' THEN 1
+          WHEN 'Coordinador de Ruta' THEN 2
+          WHEN 'Jefe de Sección' THEN 3
+          ELSE 4
+        END ASC,
+        zona ASC NULLS LAST,
+        ruta ASC NULLS LAST,
+        seccion ASC NULLS LAST
+    `);
+    res.json(resultado.rows);
+  } catch (error) {
+    console.error('Error al consultar estructura principal:', error);
+    res.status(500).json({ error: 'Error al consultar la estructura principal.' });
+  }
+});
+
+app.post('/api/estructura', async (req, res) => {
+  const { rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad } = req.body;
+
+  if (!rol || !nombres || !apellidos) {
+    return res.status(400).json({ error: 'Rol, nombre(s) y apellidos son obligatorios.' });
+  }
+
+  const zonaNum = zona ? parseInt(zona, 10) : null;
+  const rutaNum = ruta ? parseInt(ruta, 10) : null;
+  const seccionStr = seccion ? String(seccion).trim().padStart(4, '0') : null;
+
+  try {
+    if (rol === 'Coordinador de Zona') {
+      if (!zonaNum || zonaNum < 1 || zonaNum > 20) {
+        return res.status(400).json({ error: 'La Zona debe estar entre 1 y 20.' });
+      }
+      const existeZona = await pool.query(
+        "SELECT id FROM estructura_principal WHERE rol = 'Coordinador de Zona' AND zona = $1",
+        [zonaNum]
+      );
+      if (existeZona.rows.length > 0) {
+        return res.status(400).json({ error: `La Zona ${zonaNum} ya tiene un Coordinador de Zona asignado.` });
+      }
+      const totalZonas = await pool.query(
+        "SELECT COUNT(*) FROM estructura_principal WHERE rol = 'Coordinador de Zona'"
+      );
+      if (parseInt(totalZonas.rows[0].count, 10) >= 20) {
+        return res.status(400).json({ error: 'Ya se alcanzó el límite máximo de 20 Coordinadores de Zona.' });
+      }
+    } else if (rol === 'Coordinador de Ruta') {
+      if (!zonaNum || zonaNum < 1 || zonaNum > 20) {
+        return res.status(400).json({ error: 'Debes seleccionar una Zona válida (1 a 20).' });
+      }
+      if (!rutaNum || rutaNum < 1 || rutaNum > 37) {
+        return res.status(400).json({ error: 'La Ruta debe estar entre 1 y 37.' });
+      }
+      const existeRuta = await pool.query(
+        "SELECT id FROM estructura_principal WHERE rol = 'Coordinador de Ruta' AND ruta = $1",
+        [rutaNum]
+      );
+      if (existeRuta.rows.length > 0) {
+        return res.status(400).json({ error: `La Ruta ${rutaNum} ya tiene un Coordinador de Ruta asignado.` });
+      }
+      const totalRutas = await pool.query(
+        "SELECT COUNT(*) FROM estructura_principal WHERE rol = 'Coordinador de Ruta'"
+      );
+      if (parseInt(totalRutas.rows[0].count, 10) >= 37) {
+        return res.status(400).json({ error: 'Ya se alcanzó el límite máximo de 37 Coordinadores de Ruta.' });
+      }
+    } else if (rol === 'Jefe de Sección') {
+      if (!zonaNum || zonaNum < 1 || zonaNum > 20) {
+        return res.status(400).json({ error: 'Debes seleccionar una Zona válida (1 a 20).' });
+      }
+      if (!rutaNum || rutaNum < 1 || rutaNum > 37) {
+        return res.status(400).json({ error: 'Debes seleccionar una Ruta válida (1 a 37).' });
+      }
+      if (!seccionStr || !SECCIONES_CUNDUACAN.includes(seccionStr)) {
+        return res.status(400).json({ error: 'Selecciona una de las 60 secciones válidas de Cunduacán (0609-0653, 0655-0667, 1202 o 1203).' });
+      }
+      const existeSeccion = await pool.query(
+        "SELECT id FROM estructura_principal WHERE rol = 'Jefe de Sección' AND seccion = $1",
+        [seccionStr]
+      );
+      if (existeSeccion.rows.length > 0) {
+        return res.status(400).json({ error: `La Sección ${seccionStr} ya tiene un Jefe de Sección asignado.` });
+      }
+      const totalSecciones = await pool.query(
+        "SELECT COUNT(*) FROM estructura_principal WHERE rol = 'Jefe de Sección'"
+      );
+      if (parseInt(totalSecciones.rows[0].count, 10) >= 60) {
+        return res.status(400).json({ error: 'Ya se alcanzó el límite máximo de 60 Jefes de Sección.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Rol no válido en la estructura principal.' });
+    }
+
+    await pool.query(
+      `INSERT INTO estructura_principal (rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        rol,
+        zonaNum,
+        rol === 'Coordinador de Zona' ? null : rutaNum,
+        rol === 'Jefe de Sección' ? seccionStr : null,
+        String(nombres).trim().toUpperCase(),
+        String(apellidos).trim().toUpperCase(),
+        telefono ? String(telefono).trim() : '',
+        localidad ? String(localidad).trim().toUpperCase() : ''
+      ]
+    );
+
+    res.status(201).json({ mensaje: 'Integrante registrado en la Estructura Principal.' });
+  } catch (error) {
+    console.error('Error al guardar en estructura principal:', error);
+    res.status(500).json({ error: 'Error al guardar en la estructura principal.' });
+  }
+});
+
+app.patch('/api/estructura/:id/editar', async (req, res) => {
+  const { id } = req.params;
+  const { rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad } = req.body;
+
+  const zonaNum = zona ? parseInt(zona, 10) : null;
+  const rutaNum = ruta ? parseInt(ruta, 10) : null;
+  const seccionStr = seccion ? String(seccion).trim().padStart(4, '0') : null;
+
+  try {
+    if (rol === 'Coordinador de Zona') {
+      const dup = await pool.query(
+        "SELECT id FROM estructura_principal WHERE rol = 'Coordinador de Zona' AND zona = $1 AND id != $2",
+        [zonaNum, id]
+      );
+      if (dup.rows.length > 0) {
+        return res.status(400).json({ error: `La Zona ${zonaNum} ya está asignada a otro coordinador.` });
+      }
+    } else if (rol === 'Coordinador de Ruta') {
+      const dup = await pool.query(
+        "SELECT id FROM estructura_principal WHERE rol = 'Coordinador de Ruta' AND ruta = $1 AND id != $2",
+        [rutaNum, id]
+      );
+      if (dup.rows.length > 0) {
+        return res.status(400).json({ error: `La Ruta ${rutaNum} ya está asignada a otro coordinador.` });
+      }
+    } else if (rol === 'Jefe de Sección') {
+      if (!seccionStr || !SECCIONES_CUNDUACAN.includes(seccionStr)) {
+        return res.status(400).json({ error: 'Selecciona una de las 60 secciones válidas de Cunduacán.' });
+      }
+      const dup = await pool.query(
+        "SELECT id FROM estructura_principal WHERE rol = 'Jefe de Sección' AND seccion = $1 AND id != $2",
+        [seccionStr, id]
+      );
+      if (dup.rows.length > 0) {
+        return res.status(400).json({ error: `La Sección ${seccionStr} ya está asignada a otro jefe de sección.` });
+      }
+    }
+
+    await pool.query(
+      `UPDATE estructura_principal
+       SET rol = $1, zona = $2, ruta = $3, seccion = $4, nombres = $5, apellidos = $6, telefono = $7, localidad = $8
+       WHERE id = $9`,
+      [
+        rol,
+        zonaNum,
+        rol === 'Coordinador de Zona' ? null : rutaNum,
+        rol === 'Jefe de Sección' ? seccionStr : null,
+        String(nombres).trim().toUpperCase(),
+        String(apellidos).trim().toUpperCase(),
+        telefono ? String(telefono).trim() : '',
+        localidad ? String(localidad).trim().toUpperCase() : '',
+        id
+      ]
+    );
+    res.json({ mensaje: 'Registro actualizado correctamente.' });
+  } catch (error) {
+    console.error('Error al editar estructura:', error);
+    res.status(500).json({ error: 'Error al actualizar el registro.' });
+  }
+});
+
+app.delete('/api/estructura/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM estructura_principal WHERE id = $1', [req.params.id]);
+    res.json({ mensaje: 'Registro eliminado correctamente.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar el registro.' });
+  }
+});
+
+// ==========================================
 // ARRANQUE DEL SERVIDOR Y TIMEOUTS PARA RENDER
 // ==========================================
 const server = app.listen(PORT, () => {
   console.log(`🚀 Servidor ejecutándose en el puerto ${PORT}`);
 });
 
-// Evita desconexiones prematuras del proxy inverso de Render bajo alta carga
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;

@@ -8,6 +8,15 @@ let globalStaffEdit = [];
 let globalPaseListaAdmin = [];
 let globalPromotoresEdit = [];
 let globalPromotoresLista = [];
+let globalEstructuraPrincipal = [];
+
+// 60 SECCIONES ELECTORALES OFICIALES DE CUNDUACÁN, TABASCO
+// (0609 a 0653, 0655 a 0667, más 1202 y 1203 por división de la 0654)
+const SECCIONES_CUNDUACAN = [
+  ...Array.from({ length: 59 }, (_, i) => String(609 + i).padStart(4, '0')).filter(s => s !== '0654'),
+  '1202',
+  '1203'
+];
 
 const ITEMS_POR_PAGINA = 50;
 let paginaActualLista = 1;
@@ -201,6 +210,7 @@ function mostrarSeccionAdmin(seccionId) {
   document.getElementById(seccionId).style.display = 'block';
   document.getElementById('btn-' + seccionId).classList.add('active');
 
+  if (seccionId === 'admin-estructura') cargarEstructuraPrincipal();
   if (seccionId === 'admin-captura') cargarDatalistPromotores();
   if (seccionId === 'admin-lista') cargarListaGlobalAdmin();
   if (seccionId === 'admin-gestion-simp') cargarGestionSimpatizantes();
@@ -721,7 +731,6 @@ function renderResumenPromotor() {
     contenedor.innerHTML = paginados.map(p => {
       const nombrePromotorNorm = normalizarTexto(p.nombre);
 
-      // Filtrar ÚNICAMENTE simpatizantes cuya referencia contenga el nombre exacto del promotor
       const simpatizantesProm = globalListaGeneral.filter(s => {
         const refNorm = normalizarTexto(s.referencia);
         if (!refNorm || !nombrePromotorNorm) return false;
@@ -733,7 +742,6 @@ function renderResumenPromotor() {
       const totalSimp = simpatizantesProm.length;
       const votaronSimp = simpatizantesProm.filter(s => s.asistio).length;
 
-      // CÁLCULO DE EFECTIVIDAD (Meta: 15 Votos = 100%)
       const metaVotos = 15;
       const porcentajeEfectividad = ((votaronSimp / metaVotos) * 100).toFixed(1);
 
@@ -893,7 +901,6 @@ function obtenerFechaHoy() {
   return new Date().toISOString().split('T')[0];
 }
 
-// Cargar todas las secciones disponibles (de simpatizantes y promotores) en el filtro de exportación
 async function cargarSeccionesExportar() {
   try {
     const [resSimp, resProm] = await Promise.all([
@@ -905,6 +912,7 @@ async function cargarSeccionesExportar() {
 
     const seccionesUnicas = [
       ...new Set([
+        ...SECCIONES_CUNDUACAN,
         ...simpatizantes.map(s => String(s.seccion).trim()),
         ...promotores.map(p => String(p.seccion).trim())
       ].filter(Boolean))
@@ -924,7 +932,6 @@ async function cargarSeccionesExportar() {
   }
 }
 
-// EXPORTAR SIMPATIZANTES A EXCEL (CON FILTRO DE SECCIÓN)
 async function exportarSimpatizantesExcel() {
   try {
     const res = await fetch('/api/simpatizantes-todos');
@@ -961,7 +968,6 @@ async function exportarSimpatizantesExcel() {
   }
 }
 
-// EXPORTAR SIMPATIZANTES A PDF (CON FILTRO DE SECCIÓN)
 async function exportarSimpatizantesPDF() {
   try {
     const res = await fetch('/api/simpatizantes-todos');
@@ -1012,7 +1018,6 @@ async function exportarSimpatizantesPDF() {
   }
 }
 
-// EXPORTAR PROMOTORES A EXCEL (CON FILTRO DE SECCIÓN)
 async function exportarPromotoresExcel() {
   try {
     const [resProm, resSimp] = await Promise.all([
@@ -1065,7 +1070,6 @@ async function exportarPromotoresExcel() {
   }
 }
 
-// EXPORTAR PROMOTORES Y EFECTIVIDAD A PDF (CON FILTRO DE SECCIÓN)
 async function exportarPromotoresPDF() {
   try {
     const [resProm, resSimp] = await Promise.all([
@@ -1124,7 +1128,6 @@ async function exportarPromotoresPDF() {
   }
 }
 
-// DESCARGAR PLANTILLAS MODELO DE EXCEL
 function descargarPlantillaSimpatizantes() {
   const ejemplo = [
     { nombre: 'PEREZ LOPEZ, JUAN', telefono: '9141000000', seccion: '0645', localidad: 'CENTRO', referencia: 'CARLOS RUIZ (Secc. 0645)' }
@@ -1145,7 +1148,6 @@ function descargarPlantillaPromotores() {
   XLSX.writeFile(libro, 'Plantilla_Importar_Promotores.xlsx');
 }
 
-// IMPORTAR EXCEL HACIA LA BASE DE DATOS
 function importarExcel(tipo) {
   const inputId = tipo === 'simpatizantes' ? 'archivoExcelSimpatizantes' : 'archivoExcelPromotores';
   const input = document.getElementById(inputId);
@@ -1169,7 +1171,6 @@ function importarExcel(tipo) {
         return;
       }
 
-      // Normalizar nombres de columnas (acepta mayúsculas, minúsculas o acentos)
       const registros = filasCrudas.map(fila => {
         const obj = {};
         for (const clave in fila) {
@@ -1219,6 +1220,349 @@ function importarExcel(tipo) {
     }
   };
   lector.readAsArrayBuffer(archivo);
+}
+
+// ==========================================
+// 13. ESTRUCTURA PRINCIPAL (20 ZONAS, 37 RUTAS, 60 SECCIONES)
+// ==========================================
+async function cargarEstructuraPrincipal() {
+  try {
+    const res = await fetch('/api/estructura');
+    globalEstructuraPrincipal = await res.json();
+
+    poblarSelectoresEstructura();
+    actualizarCamposEstructura();
+    actualizarContadoresEstructura();
+    renderEstructuraPrincipal();
+  } catch (error) {
+    console.error('Error al cargar estructura principal:', error);
+  }
+}
+
+function poblarSelectoresEstructura() {
+  // 1. Zonas (1 al 20)
+  const zonasOcupadas = new Map();
+  globalEstructuraPrincipal
+    .filter(x => x.rol === 'Coordinador de Zona' && x.zona)
+    .forEach(x => zonasOcupadas.set(Number(x.zona), `${x.nombres} ${x.apellidos}`));
+
+  const selZona = document.getElementById('estZona');
+  const filtroZona = document.getElementById('filtroZonaEstructura');
+  let htmlZonas = '';
+  let primeraZonaLibre = null;
+
+  for (let z = 1; z <= 20; z++) {
+    const ocupadoPor = zonasOcupadas.get(z);
+    if (!ocupadoPor && primeraZonaLibre === null) primeraZonaLibre = z;
+    htmlZonas += `<option value="${z}">Zona ${z}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
+  }
+  selZona.innerHTML = htmlZonas;
+  if (primeraZonaLibre) selZona.value = String(primeraZonaLibre);
+
+  if (filtroZona) {
+    const valActualFiltro = filtroZona.value;
+    let htmlFiltroZona = '<option value="TODAS">Todas las Zonas</option>';
+    for (let z = 1; z <= 20; z++) {
+      htmlFiltroZona += `<option value="${z}">Zona ${z}</option>`;
+    }
+    filtroZona.innerHTML = htmlFiltroZona;
+    if (valActualFiltro) filtroZona.value = valActualFiltro;
+  }
+
+  // 2. Rutas (1 al 37)
+  const rutasOcupadas = new Map();
+  globalEstructuraPrincipal
+    .filter(x => x.rol === 'Coordinador de Ruta' && x.ruta)
+    .forEach(x => rutasOcupadas.set(Number(x.ruta), `${x.nombres} ${x.apellidos}`));
+
+  const selRuta = document.getElementById('estRuta');
+  let htmlRutas = '';
+  let primeraRutaLibre = null;
+
+  for (let r = 1; r <= 37; r++) {
+    const ocupadoPor = rutasOcupadas.get(r);
+    if (!ocupadoPor && primeraRutaLibre === null) primeraRutaLibre = r;
+    htmlRutas += `<option value="${r}">Ruta ${r}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
+  }
+  selRuta.innerHTML = htmlRutas;
+  if (primeraRutaLibre) selRuta.value = String(primeraRutaLibre);
+
+  // 3. 60 Secciones Electorales Oficiales de Cunduacán (0609-0653, 0655-0667, 1202 y 1203)
+  const seccionesOcupadas = new Map();
+  globalEstructuraPrincipal
+    .filter(x => x.rol === 'Jefe de Sección' && x.seccion)
+    .forEach(x => seccionesOcupadas.set(String(x.seccion).trim(), `${x.nombres} ${x.apellidos}`));
+
+  const selSeccion = document.getElementById('estSeccion');
+  let htmlSecciones = '';
+  let primeraSeccionLibre = null;
+
+  SECCIONES_CUNDUACAN.forEach(sec => {
+    const ocupadoPor = seccionesOcupadas.get(sec);
+    if (!ocupadoPor && primeraSeccionLibre === null) primeraSeccionLibre = sec;
+    htmlSecciones += `<option value="${sec}">Sección ${sec}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
+  });
+  selSeccion.innerHTML = htmlSecciones;
+  if (primeraSeccionLibre) selSeccion.value = primeraSeccionLibre;
+}
+
+function actualizarCamposEstructura() {
+  const rol = document.getElementById('estRol').value;
+  const grupoZona = document.getElementById('grupoEstZona');
+  const grupoRuta = document.getElementById('grupoEstRuta');
+  const grupoSeccion = document.getElementById('grupoEstSeccion');
+
+  const selZona = document.getElementById('estZona');
+  const selRuta = document.getElementById('estRuta');
+  const selSeccion = document.getElementById('estSeccion');
+
+  grupoZona.style.display = 'block';
+  selZona.required = true;
+
+  if (rol === 'Coordinador de Zona') {
+    grupoRuta.style.display = 'none';
+    selRuta.required = false;
+    grupoSeccion.style.display = 'none';
+    selSeccion.required = false;
+  } else if (rol === 'Coordinador de Ruta') {
+    grupoRuta.style.display = 'block';
+    selRuta.required = true;
+    grupoSeccion.style.display = 'none';
+    selSeccion.required = false;
+  } else if (rol === 'Jefe de Sección') {
+    grupoRuta.style.display = 'block';
+    selRuta.required = true;
+    grupoSeccion.style.display = 'block';
+    selSeccion.required = true;
+  }
+}
+
+function actualizarContadoresEstructura() {
+  const totalZonas = globalEstructuraPrincipal.filter(x => x.rol === 'Coordinador de Zona').length;
+  const totalRutas = globalEstructuraPrincipal.filter(x => x.rol === 'Coordinador de Ruta').length;
+  const totalSecciones = globalEstructuraPrincipal.filter(x => x.rol === 'Jefe de Sección').length;
+  const totalGeneral = globalEstructuraPrincipal.length;
+
+  document.getElementById('contadorEstZonas').innerText = `${totalZonas} / 20`;
+  document.getElementById('contadorEstRutas').innerText = `${totalRutas} / 37`;
+  document.getElementById('contadorEstSecciones').innerText = `${totalSecciones} / 60`;
+  document.getElementById('contadorEstTotal').innerText = `${totalGeneral} / 117`;
+}
+
+document.getElementById('formEstructuraPrincipal').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const rol = document.getElementById('estRol').value;
+  const zona = document.getElementById('estZona').value;
+  const ruta = document.getElementById('estRuta').value;
+  const seccion = document.getElementById('estSeccion').value;
+
+  const res = await fetch('/api/estructura', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rol,
+      zona,
+      ruta: rol === 'Coordinador de Zona' ? null : ruta,
+      seccion: rol === 'Jefe de Sección' ? seccion : null,
+      nombres: document.getElementById('estNombres').value.trim().toUpperCase(),
+      apellidos: document.getElementById('estApellidos').value.trim().toUpperCase(),
+      telefono: document.getElementById('estTelefono').value.trim(),
+      localidad: document.getElementById('estLocalidad').value.trim().toUpperCase()
+    })
+  });
+
+  const data = await res.json();
+  if (res.ok) {
+    alert(`✅ ${data.mensaje}`);
+    document.getElementById('estNombres').value = '';
+    document.getElementById('estApellidos').value = '';
+    document.getElementById('estTelefono').value = '';
+    document.getElementById('estLocalidad').value = '';
+    await cargarEstructuraPrincipal();
+  } else {
+    alert(`⚠️ ${data.error}`);
+  }
+});
+
+function renderEstructuraPrincipal() {
+  const filtroRol = document.getElementById('filtroRolEstructura').value;
+  const filtroZona = document.getElementById('filtroZonaEstructura').value;
+  const filtroTxt = normalizarTexto(document.getElementById('buscadorEstructura').value);
+
+  const filtrados = globalEstructuraPrincipal.filter(item => {
+    const matchRol = (filtroRol === 'TODOS' || item.rol === filtroRol);
+    const matchZona = (filtroZona === 'TODAS' || String(item.zona) === String(filtroZona));
+    const textoFila = normalizarTexto(`${item.nombres} ${item.apellidos} ${item.localidad} ${item.seccion || ''} ${item.telefono || ''}`);
+    const matchTxt = textoFila.includes(filtroTxt);
+    return matchRol && matchZona && matchTxt;
+  });
+
+  const tbody = document.getElementById('tablaEstructuraPrincipal');
+  if (filtrados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #64748b; padding: 16px;">No hay integrantes registrados con ese filtro.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map(item => {
+    let badgeRol = 'background: #dbeafe; color: #1e40af;';
+    if (item.rol === 'Coordinador de Ruta') badgeRol = 'background: #dcfce7; color: #166534;';
+    if (item.rol === 'Jefe de Sección') badgeRol = 'background: #fef9c3; color: #854d0e;';
+
+    return `
+      <tr>
+        <td><span style="${badgeRol} padding: 3px 8px; border-radius: 12px; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">${item.rol}</span></td>
+        <td><strong>${item.zona ? `Zona ${item.zona}` : '---'}</strong></td>
+        <td>${item.ruta ? `Ruta ${item.ruta}` : '---'}</td>
+        <td>${item.seccion ? `<span style="background:#e2e8f0; padding:2px 6px; border-radius:4px; font-weight:600;">${item.seccion}</span>` : '---'}</td>
+        <td><strong>${item.nombres} ${item.apellidos}</strong></td>
+        <td>${item.telefono || '---'}</td>
+        <td>${item.localidad || '---'}</td>
+        <td style="display: flex; gap: 5px;">
+          <button class="btn-primary" style="padding: 4px 8px;" onclick="abrirModalEditarEstructura(${item.id})">✏️</button>
+          <button class="btn-secondary" style="background: #dc2626; color: white; padding: 4px 8px;" onclick="eliminarEstructura(${item.id})">🗑️</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function actualizarCamposModalEstructura() {
+  const rol = document.getElementById('editEstRol').value;
+  document.getElementById('grupoEditEstRuta').style.display = (rol === 'Coordinador de Zona') ? 'none' : 'block';
+  document.getElementById('grupoEditEstSeccion').style.display = (rol === 'Jefe de Sección') ? 'block' : 'none';
+}
+
+function abrirModalEditarEstructura(id) {
+  const item = globalEstructuraPrincipal.find(x => x.id === id);
+  if (!item) return;
+
+  let optZonas = '';
+  for (let z = 1; z <= 20; z++) optZonas += `<option value="${z}">Zona ${z}</option>`;
+  document.getElementById('editEstZona').innerHTML = optZonas;
+
+  let optRutas = '';
+  for (let r = 1; r <= 37; r++) optRutas += `<option value="${r}">Ruta ${r}</option>`;
+  document.getElementById('editEstRuta').innerHTML = optRutas;
+
+  document.getElementById('editEstSeccion').innerHTML = SECCIONES_CUNDUACAN
+    .map(sec => `<option value="${sec}">Sección ${sec}</option>`)
+    .join('');
+
+  document.getElementById('editEstId').value = item.id;
+  document.getElementById('editEstRol').value = item.rol;
+  document.getElementById('editEstZona').value = item.zona || 1;
+  document.getElementById('editEstRuta').value = item.ruta || 1;
+  document.getElementById('editEstSeccion').value = item.seccion || SECCIONES_CUNDUACAN[0];
+  document.getElementById('editEstNombres').value = item.nombres;
+  document.getElementById('editEstApellidos').value = item.apellidos;
+  document.getElementById('editEstTelefono').value = item.telefono || '';
+  document.getElementById('editEstLocalidad').value = item.localidad || '';
+
+  actualizarCamposModalEstructura();
+  document.getElementById('modalEditarEstructura').style.display = 'flex';
+}
+
+document.getElementById('formEditarEstructura').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('editEstId').value;
+  const rol = document.getElementById('editEstRol').value;
+
+  const res = await fetch(`/api/estructura/${id}/editar`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rol,
+      zona: document.getElementById('editEstZona').value,
+      ruta: rol === 'Coordinador de Zona' ? null : document.getElementById('editEstRuta').value,
+      seccion: rol === 'Jefe de Sección' ? document.getElementById('editEstSeccion').value : null,
+      nombres: document.getElementById('editEstNombres').value.trim().toUpperCase(),
+      apellidos: document.getElementById('editEstApellidos').value.trim().toUpperCase(),
+      telefono: document.getElementById('editEstTelefono').value.trim(),
+      localidad: document.getElementById('editEstLocalidad').value.trim().toUpperCase()
+    })
+  });
+
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('modalEditarEstructura').style.display = 'none';
+    await cargarEstructuraPrincipal();
+  } else {
+    alert(`⚠️ ${data.error}`);
+  }
+});
+
+async function eliminarEstructura(id) {
+  if (confirm('¿Eliminar permanentemente a este integrante de la Estructura Principal?')) {
+    await fetch(`/api/estructura/${id}`, { method: 'DELETE' });
+    await cargarEstructuraPrincipal();
+  }
+}
+
+async function exportarEstructuraExcel() {
+  try {
+    const res = await fetch('/api/estructura');
+    const datos = await res.json();
+    if (datos.length === 0) return alert('No hay registros en la Estructura Principal para exportar.');
+
+    const filas = datos.map(item => ({
+      'ID': item.id,
+      'Rol': item.rol,
+      'Zona': item.zona ? `Zona ${item.zona}` : '',
+      'Ruta': item.ruta ? `Ruta ${item.ruta}` : '',
+      'Sección': item.seccion || '',
+      'Nombre(s)': item.nombres,
+      'Apellidos': item.apellidos,
+      'Teléfono': item.telefono || '',
+      'Localidad': item.localidad || ''
+    }));
+
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Estructura_Principal');
+    XLSX.writeFile(libro, `Estructura_Principal_Cunduacan_${obtenerFechaHoy()}.xlsx`);
+  } catch (error) {
+    alert('Error al exportar la Estructura Principal a Excel.');
+  }
+}
+
+async function exportarEstructuraPDF() {
+  try {
+    const res = await fetch('/api/estructura');
+    const datos = await res.json();
+    if (datos.length === 0) return alert('No hay registros en la Estructura Principal para exportar.');
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape');
+
+    doc.setFontSize(16);
+    doc.text('Estructura Principal - Cunduacán (20 Zonas, 37 Rutas, 60 Secciones)', 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Fecha de generación: ${obtenerFechaHoy()} | Total integrantes: ${datos.length} / 117`, 14, 22);
+
+    const columnas = ['Rol', 'Zona', 'Ruta', 'Secc.', 'Nombre(s)', 'Apellidos', 'Teléfono', 'Localidad'];
+    const filas = datos.map(item => [
+      item.rol,
+      item.zona ? `Zona ${item.zona}` : '---',
+      item.ruta ? `Ruta ${item.ruta}` : '---',
+      item.seccion || '---',
+      item.nombres,
+      item.apellidos,
+      item.telefono || '---',
+      item.localidad || '---'
+    ]);
+
+    doc.autoTable({
+      head: [columnas],
+      body: filas,
+      startY: 28,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 64, 175] }
+    });
+
+    doc.save(`Estructura_Principal_Cunduacan_${obtenerFechaHoy()}.pdf`);
+  } catch (error) {
+    alert('Error al exportar la Estructura Principal a PDF.');
+  }
 }
 
 // ARRANQUE DE APLICACIÓN
