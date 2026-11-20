@@ -1233,13 +1233,29 @@ function parsearSeccionesLista(seccionTexto) {
     .filter(Boolean);
 }
 
+// Devuelve un Map(seccion -> etiquetaOcupante) de las secciones ya ocupadas por ese rol
+function obtenerMapaSeccionesOcupadasPorRol(rol, excludeId = null) {
+  const mapa = new Map();
+  globalEstructuraPrincipal
+    .filter(item => item.rol === rol && (!excludeId || Number(item.id) !== Number(excludeId)))
+    .forEach(item => {
+      const secs = parsearSeccionesLista(item.seccion);
+      const etiqueta = item.rol === 'Coordinador de Zona'
+        ? `Zona ${item.zona}: ${item.nombres} ${item.apellidos}`
+        : item.rol === 'Coordinador de Ruta'
+          ? `Ruta ${item.ruta}: ${item.nombres} ${item.apellidos}`
+          : `${item.nombres} ${item.apellidos}`;
+      secs.forEach(s => mapa.set(s, etiqueta));
+    });
+  return mapa;
+}
+
 async function cargarEstructuraPrincipal() {
   try {
     const res = await fetch('/api/estructura');
     globalEstructuraPrincipal = await res.json();
 
     poblarSelectoresEstructura();
-    renderCheckboxesSecciones('gridCheckSeccionesEst', 'est', []);
     actualizarCamposEstructura();
     actualizarContadoresEstructura();
     renderEstructuraPrincipal();
@@ -1249,7 +1265,7 @@ async function cargarEstructuraPrincipal() {
 }
 
 function poblarSelectoresEstructura() {
-  // 1. Zonas (1 al 20)
+  // 1. Zonas (1 al 20) — bloquear las ocupadas
   const zonasOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Coordinador de Zona' && x.zona)
@@ -1263,7 +1279,7 @@ function poblarSelectoresEstructura() {
   for (let z = 1; z <= 20; z++) {
     const ocupadoPor = zonasOcupadas.get(z);
     if (!ocupadoPor && primeraZonaLibre === null) primeraZonaLibre = z;
-    htmlZonas += `<option value="${z}">Zona ${z}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
+    htmlZonas += `<option value="${z}" ${ocupadoPor ? 'disabled' : ''}>Zona ${z}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
   }
   selZona.innerHTML = htmlZonas;
   if (primeraZonaLibre) selZona.value = String(primeraZonaLibre);
@@ -1278,7 +1294,7 @@ function poblarSelectoresEstructura() {
     if (valActualFiltro) filtroZona.value = valActualFiltro;
   }
 
-  // 2. Rutas (1 al 37)
+  // 2. Rutas (1 al 37) — bloquear las ocupadas
   const rutasOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Coordinador de Ruta' && x.ruta)
@@ -1291,16 +1307,13 @@ function poblarSelectoresEstructura() {
   for (let r = 1; r <= 37; r++) {
     const ocupadoPor = rutasOcupadas.get(r);
     if (!ocupadoPor && primeraRutaLibre === null) primeraRutaLibre = r;
-    htmlRutas += `<option value="${r}">Ruta ${r}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
+    htmlRutas += `<option value="${r}" ${ocupadoPor ? 'disabled' : ''}>Ruta ${r}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
   }
   selRuta.innerHTML = htmlRutas;
   if (primeraRutaLibre) selRuta.value = String(primeraRutaLibre);
 
-  // 3. Selector de 1 Sección (Solo para Jefe de Sección)
-  const seccionesJefeOcupadas = new Map();
-  globalEstructuraPrincipal
-    .filter(x => x.rol === 'Jefe de Sección' && x.seccion)
-    .forEach(x => seccionesJefeOcupadas.set(String(x.seccion).trim(), `${x.nombres} ${x.apellidos}`));
+  // 3. Selector de 1 Sección (Solo para Jefe de Sección) — bloquear las ocupadas
+  const seccionesJefeOcupadas = obtenerMapaSeccionesOcupadasPorRol('Jefe de Sección', null);
 
   const selSeccionUnica = document.getElementById('estSeccionUnica');
   let htmlSecciones = '';
@@ -1309,18 +1322,35 @@ function poblarSelectoresEstructura() {
   SECCIONES_CUNDUACAN.forEach(sec => {
     const ocupadoPor = seccionesJefeOcupadas.get(sec);
     if (!ocupadoPor && primeraSeccionLibre === null) primeraSeccionLibre = sec;
-    htmlSecciones += `<option value="${sec}">Sección ${sec}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
+    htmlSecciones += `<option value="${sec}" ${ocupadoPor ? 'disabled' : ''}>Sección ${sec}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
   });
   selSeccionUnica.innerHTML = htmlSecciones;
   if (primeraSeccionLibre) selSeccionUnica.value = primeraSeccionLibre;
 }
 
-function renderCheckboxesSecciones(contenedorId, prefijo, seleccionadas = []) {
+function renderCheckboxesSecciones(contenedorId, prefijo, seleccionadas = [], rol = null, excludeId = null) {
   const cont = document.getElementById(contenedorId);
   if (!cont) return;
+
+  const rolActual = rol || (prefijo === 'est'
+    ? document.getElementById('estRol').value
+    : document.getElementById('editEstRol').value);
+
+  const ocupadas = obtenerMapaSeccionesOcupadasPorRol(rolActual, excludeId);
   const setSel = new Set(seleccionadas.map(s => String(s).trim()));
 
   cont.innerHTML = SECCIONES_CUNDUACAN.map(sec => {
+    const ocupadoPor = ocupadas.get(sec);
+
+    if (ocupadoPor) {
+      return `
+        <label class="item-check-seccion-${prefijo}" data-sec="${sec}" title="Bloqueada - Ocupada por ${ocupadoPor}" style="display: flex; align-items: center; gap: 4px; font-size: 0.82rem; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; background: #f1f5f9; color: #94a3b8; cursor: not-allowed; margin: 0; opacity: 0.8;">
+          <input type="checkbox" class="chk-sec-${prefijo}" value="${sec}" disabled>
+          <span>🔒 ${sec}</span>
+        </label>
+      `;
+    }
+
     const checked = setSel.has(sec) ? 'checked' : '';
     return `
       <label class="item-check-seccion-${prefijo}" data-sec="${sec}" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; background: ${checked ? '#eff6ff' : '#ffffff'}; cursor: pointer; margin: 0;">
@@ -1335,19 +1365,29 @@ function renderCheckboxesSecciones(contenedorId, prefijo, seleccionadas = []) {
 
 function actualizarContadorCheckSecciones(prefijo) {
   const checks = document.querySelectorAll(`.chk-sec-${prefijo}`);
-  let total = 0;
+  let totalSel = 0;
+  let totalBloq = 0;
+
   checks.forEach(chk => {
+    if (chk.disabled) {
+      totalBloq++;
+      return;
+    }
     const lbl = chk.closest('label');
     if (chk.checked) {
-      total++;
+      totalSel++;
       if (lbl) lbl.style.background = '#eff6ff';
     } else {
       if (lbl) lbl.style.background = '#ffffff';
     }
   });
+
+  const disponibles = SECCIONES_CUNDUACAN.length - totalBloq;
   const spanId = prefijo === 'est' ? 'contadorCheckSecciones' : 'contadorEditCheckSecciones';
   const span = document.getElementById(spanId);
-  if (span) span.innerText = `${total} seleccionada${total === 1 ? '' : 's'}`;
+  if (span) {
+    span.innerText = `${totalSel} seleccionada${totalSel === 1 ? '' : 's'} (${totalBloq} ocupadas, ${disponibles} disponibles)`;
+  }
 }
 
 function filtrarCheckboxesSecciones(prefijo) {
@@ -1360,13 +1400,13 @@ function filtrarCheckboxesSecciones(prefijo) {
 }
 
 function limpiarCheckboxesSecciones(prefijo) {
-  const checks = document.querySelectorAll(`.chk-sec-${prefijo}`);
+  const checks = document.querySelectorAll(`.chk-sec-${prefijo}:not(:disabled)`);
   checks.forEach(chk => { chk.checked = false; });
   actualizarContadorCheckSecciones(prefijo);
 }
 
 function obtenerSeccionesMarcadas(prefijo) {
-  return Array.from(document.querySelectorAll(`.chk-sec-${prefijo}:checked`)).map(chk => chk.value);
+  return Array.from(document.querySelectorAll(`.chk-sec-${prefijo}:checked:not(:disabled)`)).map(chk => chk.value);
 }
 
 function actualizarCamposEstructura() {
@@ -1389,12 +1429,20 @@ function actualizarCamposEstructura() {
     grupoSeccionUnica.style.display = 'none';
     selSeccionUnica.required = false;
     grupoSeccionesMulti.style.display = 'block';
+
+    const prevSel = obtenerSeccionesMarcadas('est');
+    renderCheckboxesSecciones('gridCheckSeccionesEst', 'est', prevSel, 'Coordinador de Zona', null);
+    filtrarCheckboxesSecciones('est');
   } else if (rol === 'Coordinador de Ruta') {
     grupoRuta.style.display = 'block';
     selRuta.required = true;
     grupoSeccionUnica.style.display = 'none';
     selSeccionUnica.required = false;
     grupoSeccionesMulti.style.display = 'block';
+
+    const prevSel = obtenerSeccionesMarcadas('est');
+    renderCheckboxesSecciones('gridCheckSeccionesEst', 'est', prevSel, 'Coordinador de Ruta', null);
+    filtrarCheckboxesSecciones('est');
   } else if (rol === 'Jefe de Sección') {
     grupoRuta.style.display = 'block';
     selRuta.required = true;
@@ -1424,11 +1472,16 @@ document.getElementById('formEstructuraPrincipal').addEventListener('submit', as
 
   let secciones = [];
   if (rol === 'Jefe de Sección') {
-    secciones = [document.getElementById('estSeccionUnica').value];
+    const secUnica = document.getElementById('estSeccionUnica').value;
+    if (!secUnica) {
+      alert('⚠️ No hay secciones disponibles para Jefe de Sección.');
+      return;
+    }
+    secciones = [secUnica];
   } else {
     secciones = obtenerSeccionesMarcadas('est');
     if (secciones.length === 0) {
-      alert('⚠️ Debes seleccionar al menos 1 sección electoral para este rol.');
+      alert('⚠️ Debes seleccionar al menos 1 sección electoral disponible para este rol.');
       return;
     }
   }
@@ -1517,29 +1570,58 @@ function renderEstructuraPrincipal() {
 
 function actualizarCamposModalEstructura() {
   const rol = document.getElementById('editEstRol').value;
+  const editId = document.getElementById('editEstId').value;
+
   document.getElementById('grupoEditEstRuta').style.display = (rol === 'Coordinador de Zona') ? 'none' : 'block';
   document.getElementById('grupoEditEstSeccionUnica').style.display = (rol === 'Jefe de Sección') ? 'block' : 'none';
   document.getElementById('grupoEditEstSeccionesMulti').style.display = (rol === 'Jefe de Sección') ? 'none' : 'block';
+
+  if (rol !== 'Jefe de Sección') {
+    const prevSel = obtenerSeccionesMarcadas('edit');
+    renderCheckboxesSecciones('gridCheckSeccionesEdit', 'edit', prevSel, rol, editId);
+  }
 }
 
 function abrirModalEditarEstructura(id) {
   const item = globalEstructuraPrincipal.find(x => x.id === id);
   if (!item) return;
 
+  // Zonas (bloquear las ocupadas por otros)
+  const zonasOcupadas = new Map();
+  globalEstructuraPrincipal
+    .filter(x => x.rol === 'Coordinador de Zona' && x.zona && x.id !== id)
+    .forEach(x => zonasOcupadas.set(Number(x.zona), `${x.nombres} ${x.apellidos}`));
+
   let optZonas = '';
-  for (let z = 1; z <= 20; z++) optZonas += `<option value="${z}">Zona ${z}</option>`;
+  for (let z = 1; z <= 20; z++) {
+    const oc = zonasOcupadas.get(z);
+    optZonas += `<option value="${z}" ${oc ? 'disabled' : ''}>Zona ${z}${oc ? ` (Ocupada: ${oc})` : ''}</option>`;
+  }
   document.getElementById('editEstZona').innerHTML = optZonas;
 
+  // Rutas (bloquear las ocupadas por otros)
+  const rutasOcupadas = new Map();
+  globalEstructuraPrincipal
+    .filter(x => x.rol === 'Coordinador de Ruta' && x.ruta && x.id !== id)
+    .forEach(x => rutasOcupadas.set(Number(x.ruta), `${x.nombres} ${x.apellidos}`));
+
   let optRutas = '';
-  for (let r = 1; r <= 37; r++) optRutas += `<option value="${r}">Ruta ${r}</option>`;
+  for (let r = 1; r <= 37; r++) {
+    const oc = rutasOcupadas.get(r);
+    optRutas += `<option value="${r}" ${oc ? 'disabled' : ''}>Ruta ${r}${oc ? ` (Ocupada: ${oc})` : ''}</option>`;
+  }
   document.getElementById('editEstRuta').innerHTML = optRutas;
 
+  // Sección única para Jefe de Sección (bloquear las ocupadas por otros)
+  const secsJefeOcupadas = obtenerMapaSeccionesOcupadasPorRol('Jefe de Sección', id);
   document.getElementById('editEstSeccionUnica').innerHTML = SECCIONES_CUNDUACAN
-    .map(sec => `<option value="${sec}">Sección ${sec}</option>`)
+    .map(sec => {
+      const oc = secsJefeOcupadas.get(sec);
+      return `<option value="${sec}" ${oc ? 'disabled' : ''}>Sección ${sec}${oc ? ` (Ocupada: ${oc})` : ''}</option>`;
+    })
     .join('');
 
   const secsActuales = parsearSeccionesLista(item.seccion);
-  renderCheckboxesSecciones('gridCheckSeccionesEdit', 'edit', secsActuales);
 
   document.getElementById('editEstId').value = item.id;
   document.getElementById('editEstRol').value = item.rol;
@@ -1551,6 +1633,7 @@ function abrirModalEditarEstructura(id) {
   document.getElementById('editEstTelefono').value = item.telefono || '';
   document.getElementById('editEstLocalidad').value = item.localidad || '';
 
+  renderCheckboxesSecciones('gridCheckSeccionesEdit', 'edit', secsActuales, item.rol, item.id);
   actualizarCamposModalEstructura();
   document.getElementById('modalEditarEstructura').style.display = 'flex';
 }
@@ -1667,7 +1750,6 @@ async function exportarEstructuraExcel() {
         'Total Personas a Cargo': bloque.totalPersonasACargo
       });
 
-      // Nivel 1: Coordinador de Zona
       filasJerarquicas.push({
         'Jerarquía': `ZONA ${bloque.zona}`,
         'Zona': `Zona ${bloque.zona}`,
@@ -1680,7 +1762,6 @@ async function exportarEstructuraExcel() {
         'Personal a Cargo': `${bloque.totalRutas} Coord. Ruta | ${bloque.totalJefes} Jefes Secc. (Total: ${bloque.totalPersonasACargo})`
       });
 
-      // Nivel 2: Rutas de la Zona
       bloque.rutas.forEach(rObj => {
         const cr = rObj.coordRuta;
         const nombreCR = cr ? `${cr.nombres} ${cr.apellidos}` : 'SIN ASIGNAR';
@@ -1700,7 +1781,6 @@ async function exportarEstructuraExcel() {
           'Personal a Cargo': `${rObj.jefes.length} Jefes de Sección`
         });
 
-        // Nivel 3: Jefes de Sección de esa Ruta
         rObj.jefes.forEach(j => {
           filasJerarquicas.push({
             'Jerarquía': `      ↳ SECCIÓN ${j.seccion}`,
@@ -1716,7 +1796,6 @@ async function exportarEstructuraExcel() {
         });
       });
 
-      // Jefes de sección sin ruta explícita (si existieran)
       bloque.jefesSinRuta.forEach(j => {
         filasJerarquicas.push({
           'Jerarquía': `      ↳ SECCIÓN ${j.seccion}`,
@@ -1731,7 +1810,6 @@ async function exportarEstructuraExcel() {
         });
       });
 
-      // Fila separadora entre zonas
       filasJerarquicas.push({});
     });
 
@@ -1777,7 +1855,6 @@ async function exportarEstructuraPDF() {
       const locCZ = cz ? (cz.localidad || '---') : '---';
       const secCZ = cz ? (cz.seccion || '---') : '---';
 
-      // Fila destacada de Zona / Coordinador de Zona
       bodyRows.push([
         { content: `ZONA ${bloque.zona}`, styles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' } },
         { content: 'COORD. DE ZONA', styles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' } },
@@ -1795,7 +1872,6 @@ async function exportarEstructuraPDF() {
         const locCR = cr ? (cr.localidad || '---') : '---';
         const secCR = cr ? (cr.seccion || '---') : '---';
 
-        // Fila Coordinador de Ruta
         bodyRows.push([
           { content: `  ↳ Ruta ${rObj.ruta}`, styles: { fillColor: [220, 252, 231], fontStyle: 'bold' } },
           { content: 'Coord. de Ruta', styles: { fillColor: [220, 252, 231], fontStyle: 'bold' } },
@@ -1806,7 +1882,6 @@ async function exportarEstructuraPDF() {
           { content: `${rObj.jefes.length} Jefes Secc.`, styles: { fillColor: [220, 252, 231] } }
         ]);
 
-        // Filas Jefes de Sección de la Ruta
         rObj.jefes.forEach(j => {
           bodyRows.push([
             `      ↳ Secc. ${j.seccion}`,

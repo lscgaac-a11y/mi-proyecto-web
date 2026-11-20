@@ -48,6 +48,35 @@ app.use(express.static(path.join(__dirname, 'public'), {
   etag: true
 }));
 
+// Verifica si alguna sección ya está ocupada por otro integrante del mismo rol
+async function verificarSeccionesDisponibles(rol, seccionesArr, excludeId = null) {
+  let query = 'SELECT id, zona, ruta, seccion, nombres, apellidos FROM estructura_principal WHERE rol = $1';
+  const params = [rol];
+  if (excludeId) {
+    query += ' AND id != $2';
+    params.push(excludeId);
+  }
+
+  const existentes = await pool.query(query, params);
+  const conflictos = [];
+
+  for (const row of existentes.rows) {
+    const secsOcupadas = normalizarSeccionesInput(row.seccion);
+    for (const s of seccionesArr) {
+      if (secsOcupadas.includes(s)) {
+        const ubicacion = rol === 'Coordinador de Zona'
+          ? `Zona ${row.zona}`
+          : rol === 'Coordinador de Ruta'
+            ? `Ruta ${row.ruta}`
+            : 'Jefe de Sección';
+        conflictos.push(`Sección ${s} (${ubicacion}: ${row.nombres} ${row.apellidos})`);
+      }
+    }
+  }
+
+  return conflictos;
+}
+
 // ==========================================
 // INICIALIZAR TABLAS E ÍNDICES EN POSTGRESQL
 // ==========================================
@@ -111,7 +140,6 @@ async function iniciarBaseDeDatos() {
       );
     `);
 
-    // Ampliar columna seccion a TEXT si la tabla ya existía con VARCHAR(20)
     try {
       await pool.query("ALTER TABLE estructura_principal ALTER COLUMN seccion TYPE TEXT;");
     } catch (e) { /* Ya es TEXT */ }
@@ -500,6 +528,13 @@ app.post('/api/estructura', async (req, res) => {
       if (parseInt(totalZonas.rows[0].count, 10) >= 20) {
         return res.status(400).json({ error: 'Ya se alcanzó el límite máximo de 20 Coordinadores de Zona.' });
       }
+
+      const conflictos = await verificarSeccionesDisponibles('Coordinador de Zona', seccionesArr, null);
+      if (conflictos.length > 0) {
+        return res.status(400).json({
+          error: `Sección(es) ya ocupada(s) por otro Coordinador de Zona: ${conflictos.join(', ')}`
+        });
+      }
     } else if (rol === 'Coordinador de Ruta') {
       if (!zonaNum || zonaNum < 1 || zonaNum > 20) {
         return res.status(400).json({ error: 'Debes seleccionar una Zona válida (1 a 20).' });
@@ -520,6 +555,13 @@ app.post('/api/estructura', async (req, res) => {
       if (parseInt(totalRutas.rows[0].count, 10) >= 37) {
         return res.status(400).json({ error: 'Ya se alcanzó el límite máximo de 37 Coordinadores de Ruta.' });
       }
+
+      const conflictos = await verificarSeccionesDisponibles('Coordinador de Ruta', seccionesArr, null);
+      if (conflictos.length > 0) {
+        return res.status(400).json({
+          error: `Sección(es) ya ocupada(s) por otro Coordinador de Ruta: ${conflictos.join(', ')}`
+        });
+      }
     } else if (rol === 'Jefe de Sección') {
       if (!zonaNum || zonaNum < 1 || zonaNum > 20) {
         return res.status(400).json({ error: 'Debes seleccionar una Zona válida (1 a 20).' });
@@ -530,14 +572,14 @@ app.post('/api/estructura', async (req, res) => {
       if (seccionesArr.length !== 1) {
         return res.status(400).json({ error: 'El Jefe de Sección solo puede tener asignada 1 sección electoral.' });
       }
-      const seccionUnica = seccionesArr[0];
-      const existeSeccion = await pool.query(
-        "SELECT id FROM estructura_principal WHERE rol = 'Jefe de Sección' AND seccion = $1",
-        [seccionUnica]
-      );
-      if (existeSeccion.rows.length > 0) {
-        return res.status(400).json({ error: `La Sección ${seccionUnica} ya tiene un Jefe de Sección asignado.` });
+
+      const conflictos = await verificarSeccionesDisponibles('Jefe de Sección', seccionesArr, null);
+      if (conflictos.length > 0) {
+        return res.status(400).json({
+          error: `La Sección ${seccionesArr[0]} ya tiene un Jefe de Sección asignado.`
+        });
       }
+
       const totalSecciones = await pool.query(
         "SELECT COUNT(*) FROM estructura_principal WHERE rol = 'Jefe de Sección'"
       );
@@ -597,6 +639,12 @@ app.patch('/api/estructura/:id/editar', async (req, res) => {
       if (dup.rows.length > 0) {
         return res.status(400).json({ error: `La Zona ${zonaNum} ya está asignada a otro coordinador.` });
       }
+      const conflictos = await verificarSeccionesDisponibles('Coordinador de Zona', seccionesArr, id);
+      if (conflictos.length > 0) {
+        return res.status(400).json({
+          error: `Sección(es) ya ocupada(s) por otro Coordinador de Zona: ${conflictos.join(', ')}`
+        });
+      }
     } else if (rol === 'Coordinador de Ruta') {
       const dup = await pool.query(
         "SELECT id FROM estructura_principal WHERE rol = 'Coordinador de Ruta' AND ruta = $1 AND id != $2",
@@ -605,16 +653,21 @@ app.patch('/api/estructura/:id/editar', async (req, res) => {
       if (dup.rows.length > 0) {
         return res.status(400).json({ error: `La Ruta ${rutaNum} ya está asignada a otro coordinador.` });
       }
+      const conflictos = await verificarSeccionesDisponibles('Coordinador de Ruta', seccionesArr, id);
+      if (conflictos.length > 0) {
+        return res.status(400).json({
+          error: `Sección(es) ya ocupada(s) por otro Coordinador de Ruta: ${conflictos.join(', ')}`
+        });
+      }
     } else if (rol === 'Jefe de Sección') {
       if (seccionesArr.length !== 1) {
         return res.status(400).json({ error: 'El Jefe de Sección solo puede tener asignada 1 sección electoral.' });
       }
-      const dup = await pool.query(
-        "SELECT id FROM estructura_principal WHERE rol = 'Jefe de Sección' AND seccion = $1 AND id != $2",
-        [seccionesArr[0], id]
-      );
-      if (dup.rows.length > 0) {
-        return res.status(400).json({ error: `La Sección ${seccionesArr[0]} ya está asignada a otro jefe de sección.` });
+      const conflictos = await verificarSeccionesDisponibles('Jefe de Sección', seccionesArr, id);
+      if (conflictos.length > 0) {
+        return res.status(400).json({
+          error: `La Sección ${seccionesArr[0]} ya está asignada a otro jefe de sección.`
+        });
       }
     }
 
