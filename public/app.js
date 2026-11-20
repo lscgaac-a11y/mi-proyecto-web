@@ -208,6 +208,7 @@ function mostrarSeccionAdmin(seccionId) {
   if (seccionId === 'admin-pase-lista-global') cargarPaseListaGlobalAdmin();
   if (seccionId === 'admin-gestion-promotores') cargarGestionPromotores();
   if (seccionId === 'admin-resumen-promotor') cargarResumenPromotor();
+  if (seccionId === 'admin-exportar-importar') cargarSeccionesExportar();
 }
 
 function toggleSeccionAdmin() {
@@ -892,13 +893,53 @@ function obtenerFechaHoy() {
   return new Date().toISOString().split('T')[0];
 }
 
-// EXPORTAR SIMPATIZANTES A EXCEL
+// Cargar todas las secciones disponibles (de simpatizantes y promotores) en el filtro de exportación
+async function cargarSeccionesExportar() {
+  try {
+    const [resSimp, resProm] = await Promise.all([
+      fetch('/api/simpatizantes-todos'),
+      fetch('/api/promotores')
+    ]);
+    const simpatizantes = await resSimp.json();
+    const promotores = await resProm.json();
+
+    const seccionesUnicas = [
+      ...new Set([
+        ...simpatizantes.map(s => String(s.seccion).trim()),
+        ...promotores.map(p => String(p.seccion).trim())
+      ].filter(Boolean))
+    ].sort();
+
+    const select = document.getElementById('filtroSeccionExportar');
+    if (select) {
+      const valActual = select.value;
+      select.innerHTML = '<option value="TODAS">Todas las Secciones</option>' +
+        seccionesUnicas.map(sec => `<option value="${sec}">Sección ${sec}</option>`).join('');
+      if (valActual && (valActual === 'TODAS' || seccionesUnicas.includes(valActual))) {
+        select.value = valActual;
+      }
+    }
+  } catch (error) {
+    console.error('Error al cargar secciones para exportar:', error);
+  }
+}
+
+// EXPORTAR SIMPATIZANTES A EXCEL (CON FILTRO DE SECCIÓN)
 async function exportarSimpatizantesExcel() {
   try {
     const res = await fetch('/api/simpatizantes-todos');
-    const datos = await res.json();
+    let datos = await res.json();
 
-    if (datos.length === 0) return alert('No hay simpatizantes para exportar.');
+    const seccionSel = document.getElementById('filtroSeccionExportar').value;
+    if (seccionSel !== 'TODAS') {
+      datos = datos.filter(s => String(s.seccion).trim() === String(seccionSel).trim());
+    }
+
+    if (datos.length === 0) {
+      return alert(seccionSel === 'TODAS'
+        ? 'No hay simpatizantes para exportar.'
+        : `No hay simpatizantes registrados en la Sección ${seccionSel}.`);
+    }
 
     const filas = datos.map(s => ({
       'ID': s.id,
@@ -910,28 +951,39 @@ async function exportarSimpatizantesExcel() {
       'Estatus Voto': s.asistio ? 'YA VOTÓ' : 'PENDIENTE'
     }));
 
+    const sufijo = seccionSel === 'TODAS' ? 'Todas' : `Secc_${seccionSel}`;
     const hoja = XLSX.utils.json_to_sheet(filas);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Simpatizantes');
-    XLSX.writeFile(libro, `Simpatizantes_${obtenerFechaHoy()}.xlsx`);
+    XLSX.writeFile(libro, `Simpatizantes_${sufijo}_${obtenerFechaHoy()}.xlsx`);
   } catch (error) {
     alert('Error al generar archivo Excel.');
   }
 }
 
-// EXPORTAR SIMPATIZANTES A PDF
+// EXPORTAR SIMPATIZANTES A PDF (CON FILTRO DE SECCIÓN)
 async function exportarSimpatizantesPDF() {
   try {
     const res = await fetch('/api/simpatizantes-todos');
-    const datos = await res.json();
+    let datos = await res.json();
 
-    if (datos.length === 0) return alert('No hay simpatizantes para exportar.');
+    const seccionSel = document.getElementById('filtroSeccionExportar').value;
+    if (seccionSel !== 'TODAS') {
+      datos = datos.filter(s => String(s.seccion).trim() === String(seccionSel).trim());
+    }
+
+    if (datos.length === 0) {
+      return alert(seccionSel === 'TODAS'
+        ? 'No hay simpatizantes para exportar.'
+        : `No hay simpatizantes registrados en la Sección ${seccionSel}.`);
+    }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('landscape');
 
+    const textoSeccion = seccionSel === 'TODAS' ? 'Todas las Secciones' : `Sección ${seccionSel}`;
     doc.setFontSize(16);
-    doc.text('Listado General de Simpatizantes', 14, 15);
+    doc.text(`Listado de Simpatizantes (${textoSeccion})`, 14, 15);
     doc.setFontSize(10);
     doc.text(`Fecha de generación: ${obtenerFechaHoy()} | Total registros: ${datos.length}`, 14, 22);
 
@@ -953,23 +1005,33 @@ async function exportarSimpatizantesPDF() {
       headStyles: { fillColor: [37, 99, 235] }
     });
 
-    doc.save(`Simpatizantes_${obtenerFechaHoy()}.pdf`);
+    const sufijo = seccionSel === 'TODAS' ? 'Todas' : `Secc_${seccionSel}`;
+    doc.save(`Simpatizantes_${sufijo}_${obtenerFechaHoy()}.pdf`);
   } catch (error) {
     alert('Error al generar archivo PDF.');
   }
 }
 
-// EXPORTAR PROMOTORES A EXCEL
+// EXPORTAR PROMOTORES A EXCEL (CON FILTRO DE SECCIÓN)
 async function exportarPromotoresExcel() {
   try {
     const [resProm, resSimp] = await Promise.all([
       fetch('/api/promotores'),
       fetch('/api/simpatizantes-todos')
     ]);
-    const promotores = await resProm.json();
+    let promotores = await resProm.json();
     const simpatizantes = await resSimp.json();
 
-    if (promotores.length === 0) return alert('No hay promotores para exportar.');
+    const seccionSel = document.getElementById('filtroSeccionExportar').value;
+    if (seccionSel !== 'TODAS') {
+      promotores = promotores.filter(p => String(p.seccion).trim() === String(seccionSel).trim());
+    }
+
+    if (promotores.length === 0) {
+      return alert(seccionSel === 'TODAS'
+        ? 'No hay promotores para exportar.'
+        : `No hay promotores registrados en la Sección ${seccionSel}.`);
+    }
 
     const filas = promotores.map(p => {
       const nomNorm = normalizarTexto(p.nombre);
@@ -993,32 +1055,43 @@ async function exportarPromotoresExcel() {
       };
     });
 
+    const sufijo = seccionSel === 'TODAS' ? 'Todas' : `Secc_${seccionSel}`;
     const hoja = XLSX.utils.json_to_sheet(filas);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Promotores');
-    XLSX.writeFile(libro, `Promotores_${obtenerFechaHoy()}.xlsx`);
+    XLSX.writeFile(libro, `Promotores_${sufijo}_${obtenerFechaHoy()}.xlsx`);
   } catch (error) {
     alert('Error al generar archivo Excel de promotores.');
   }
 }
 
-// EXPORTAR PROMOTORES Y EFECTIVIDAD A PDF
+// EXPORTAR PROMOTORES Y EFECTIVIDAD A PDF (CON FILTRO DE SECCIÓN)
 async function exportarPromotoresPDF() {
   try {
     const [resProm, resSimp] = await Promise.all([
       fetch('/api/promotores'),
       fetch('/api/simpatizantes-todos')
     ]);
-    const promotores = await resProm.json();
+    let promotores = await resProm.json();
     const simpatizantes = await resSimp.json();
 
-    if (promotores.length === 0) return alert('No hay promotores para exportar.');
+    const seccionSel = document.getElementById('filtroSeccionExportar').value;
+    if (seccionSel !== 'TODAS') {
+      promotores = promotores.filter(p => String(p.seccion).trim() === String(seccionSel).trim());
+    }
+
+    if (promotores.length === 0) {
+      return alert(seccionSel === 'TODAS'
+        ? 'No hay promotores para exportar.'
+        : `No hay promotores registrados en la Sección ${seccionSel}.`);
+    }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
+    const textoSeccion = seccionSel === 'TODAS' ? 'Todas las Secciones' : `Sección ${seccionSel}`;
     doc.setFontSize(16);
-    doc.text('Reporte de Promotores y Efectividad', 14, 15);
+    doc.text(`Reporte de Promotores y Efectividad (${textoSeccion})`, 14, 15);
     doc.setFontSize(10);
     doc.text(`Fecha: ${obtenerFechaHoy()} | Meta por promotor: 15 votos = 100%`, 14, 22);
 
@@ -1044,7 +1117,8 @@ async function exportarPromotoresPDF() {
       headStyles: { fillColor: [22, 163, 74] }
     });
 
-    doc.save(`Promotores_Efectividad_${obtenerFechaHoy()}.pdf`);
+    const sufijo = seccionSel === 'TODAS' ? 'Todas' : `Secc_${seccionSel}`;
+    doc.save(`Promotores_Efectividad_${sufijo}_${obtenerFechaHoy()}.pdf`);
   } catch (error) {
     alert('Error al generar PDF de promotores.');
   }
@@ -1135,6 +1209,7 @@ function importarExcel(tipo) {
         input.value = '';
         if (usuarioActual.rol === 'admin') cargarAvancesAdmin();
         cargarDatalistPromotores();
+        cargarSeccionesExportar();
       } else {
         alert(`❌ Error: ${resultado.error}`);
       }

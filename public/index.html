@@ -254,16 +254,24 @@
             <div id="paginacionResumenProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
-          <!-- 12. NUEVA SECCIÓN: EXPORTAR E IMPORTAR BASE DE DATOS -->
+          <!-- 12. EXPORTAR E IMPORTAR BASE DE DATOS -->
           <section id="admin-exportar-importar" class="card admin-seccion" style="display: none;">
             <h2>💾 Exportar e Importar Base de Datos</h2>
             <p style="color: #475569; font-size: 0.9rem; margin-bottom: 20px;">
-              Descarga respaldos completos en formato Excel o reportes listos para imprimir en PDF, o carga registros masivos desde una hoja de cálculo.
+              Descarga respaldos completos o filtrados por sección en formato Excel o PDF, o carga registros masivos desde una hoja de cálculo.
             </p>
 
             <!-- BLOQUE EXPORTAR -->
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
               <h3 style="margin-bottom: 12px; color: #1e293b;">📤 Exportar Datos</h3>
+
+              <!-- FILTRO POR SECCIÓN PARA EXPORTACIÓN -->
+              <div style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                <label for="filtroSeccionExportar" style="margin: 0; font-weight: 600; color: #1e293b;">Filtrar exportación por Sección:</label>
+                <select id="filtroSeccionExportar" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #94a3b8; min-width: 180px; background: #ffffff; font-weight: 500;">
+                  <option value="TODAS">Todas las Secciones</option>
+                </select>
+              </div>
               
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
                 <!-- Excel Simpatizantes -->
@@ -418,6 +426,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
