@@ -15,6 +15,16 @@ const SECCIONES_CUNDUACAN = [
   '1203'
 ];
 
+// Normaliza y valida una o varias secciones (acepta arreglo o cadena separada por comas)
+function normalizarSeccionesInput(input) {
+  if (!input) return [];
+  const lista = Array.isArray(input) ? input : String(input).split(',');
+  const limpias = lista
+    .map(s => String(s).trim().padStart(4, '0'))
+    .filter(s => s && s !== '0000');
+  return [...new Set(limpias)].sort();
+}
+
 // ==========================================
 // POOL DE CONEXIONES OPTIMIZADO (400 USUARIOS)
 // ==========================================
@@ -92,7 +102,7 @@ async function iniciarBaseDeDatos() {
         rol VARCHAR(50) NOT NULL,
         zona INTEGER,
         ruta INTEGER,
-        seccion VARCHAR(20),
+        seccion TEXT,
         nombres VARCHAR(100) NOT NULL,
         apellidos VARCHAR(100) NOT NULL,
         telefono VARCHAR(20),
@@ -100,6 +110,11 @@ async function iniciarBaseDeDatos() {
         fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Ampliar columna seccion a TEXT si la tabla ya existía con VARCHAR(20)
+    try {
+      await pool.query("ALTER TABLE estructura_principal ALTER COLUMN seccion TYPE TEXT;");
+    } catch (e) { /* Ya es TEXT */ }
 
     // 5. ÍNDICES DE ALTO RENDIMIENTO
     await pool.query(`
@@ -124,7 +139,7 @@ async function iniciarBaseDeDatos() {
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_estructura_rol_zona_ruta 
-      ON estructura_principal (rol, zona, ruta, seccion);
+      ON estructura_principal (rol, zona, ruta);
     `);
 
     // Crear admin por defecto si no existe
@@ -429,13 +444,13 @@ app.get('/api/estructura', async (req, res) => {
       SELECT id, rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad
       FROM estructura_principal
       ORDER BY 
+        zona ASC NULLS LAST,
         CASE rol
           WHEN 'Coordinador de Zona' THEN 1
           WHEN 'Coordinador de Ruta' THEN 2
           WHEN 'Jefe de Sección' THEN 3
           ELSE 4
         END ASC,
-        zona ASC NULLS LAST,
         ruta ASC NULLS LAST,
         seccion ASC NULLS LAST
     `);
@@ -447,7 +462,7 @@ app.get('/api/estructura', async (req, res) => {
 });
 
 app.post('/api/estructura', async (req, res) => {
-  const { rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad } = req.body;
+  const { rol, zona, ruta, secciones, seccion, nombres, apellidos, telefono, localidad } = req.body;
 
   if (!rol || !nombres || !apellidos) {
     return res.status(400).json({ error: 'Rol, nombre(s) y apellidos son obligatorios.' });
@@ -455,7 +470,17 @@ app.post('/api/estructura', async (req, res) => {
 
   const zonaNum = zona ? parseInt(zona, 10) : null;
   const rutaNum = ruta ? parseInt(ruta, 10) : null;
-  const seccionStr = seccion ? String(seccion).trim().padStart(4, '0') : null;
+  const seccionesArr = normalizarSeccionesInput(secciones || seccion);
+
+  if (seccionesArr.length === 0) {
+    return res.status(400).json({ error: 'Debes asignar al menos una sección electoral.' });
+  }
+  const invalidas = seccionesArr.filter(s => !SECCIONES_CUNDUACAN.includes(s));
+  if (invalidas.length > 0) {
+    return res.status(400).json({ error: `Sección(es) no válida(s) para Cunduacán: ${invalidas.join(', ')}` });
+  }
+
+  const seccionGuardada = seccionesArr.join(', ');
 
   try {
     if (rol === 'Coordinador de Zona') {
@@ -502,15 +527,16 @@ app.post('/api/estructura', async (req, res) => {
       if (!rutaNum || rutaNum < 1 || rutaNum > 37) {
         return res.status(400).json({ error: 'Debes seleccionar una Ruta válida (1 a 37).' });
       }
-      if (!seccionStr || !SECCIONES_CUNDUACAN.includes(seccionStr)) {
-        return res.status(400).json({ error: 'Selecciona una de las 60 secciones válidas de Cunduacán (0609-0653, 0655-0667, 1202 o 1203).' });
+      if (seccionesArr.length !== 1) {
+        return res.status(400).json({ error: 'El Jefe de Sección solo puede tener asignada 1 sección electoral.' });
       }
+      const seccionUnica = seccionesArr[0];
       const existeSeccion = await pool.query(
         "SELECT id FROM estructura_principal WHERE rol = 'Jefe de Sección' AND seccion = $1",
-        [seccionStr]
+        [seccionUnica]
       );
       if (existeSeccion.rows.length > 0) {
-        return res.status(400).json({ error: `La Sección ${seccionStr} ya tiene un Jefe de Sección asignado.` });
+        return res.status(400).json({ error: `La Sección ${seccionUnica} ya tiene un Jefe de Sección asignado.` });
       }
       const totalSecciones = await pool.query(
         "SELECT COUNT(*) FROM estructura_principal WHERE rol = 'Jefe de Sección'"
@@ -529,7 +555,7 @@ app.post('/api/estructura', async (req, res) => {
         rol,
         zonaNum,
         rol === 'Coordinador de Zona' ? null : rutaNum,
-        rol === 'Jefe de Sección' ? seccionStr : null,
+        seccionGuardada,
         String(nombres).trim().toUpperCase(),
         String(apellidos).trim().toUpperCase(),
         telefono ? String(telefono).trim() : '',
@@ -546,11 +572,21 @@ app.post('/api/estructura', async (req, res) => {
 
 app.patch('/api/estructura/:id/editar', async (req, res) => {
   const { id } = req.params;
-  const { rol, zona, ruta, seccion, nombres, apellidos, telefono, localidad } = req.body;
+  const { rol, zona, ruta, secciones, seccion, nombres, apellidos, telefono, localidad } = req.body;
 
   const zonaNum = zona ? parseInt(zona, 10) : null;
   const rutaNum = ruta ? parseInt(ruta, 10) : null;
-  const seccionStr = seccion ? String(seccion).trim().padStart(4, '0') : null;
+  const seccionesArr = normalizarSeccionesInput(secciones || seccion);
+
+  if (seccionesArr.length === 0) {
+    return res.status(400).json({ error: 'Debes asignar al menos una sección electoral.' });
+  }
+  const invalidas = seccionesArr.filter(s => !SECCIONES_CUNDUACAN.includes(s));
+  if (invalidas.length > 0) {
+    return res.status(400).json({ error: `Sección(es) no válida(s) para Cunduacán: ${invalidas.join(', ')}` });
+  }
+
+  const seccionGuardada = seccionesArr.join(', ');
 
   try {
     if (rol === 'Coordinador de Zona') {
@@ -570,15 +606,15 @@ app.patch('/api/estructura/:id/editar', async (req, res) => {
         return res.status(400).json({ error: `La Ruta ${rutaNum} ya está asignada a otro coordinador.` });
       }
     } else if (rol === 'Jefe de Sección') {
-      if (!seccionStr || !SECCIONES_CUNDUACAN.includes(seccionStr)) {
-        return res.status(400).json({ error: 'Selecciona una de las 60 secciones válidas de Cunduacán.' });
+      if (seccionesArr.length !== 1) {
+        return res.status(400).json({ error: 'El Jefe de Sección solo puede tener asignada 1 sección electoral.' });
       }
       const dup = await pool.query(
         "SELECT id FROM estructura_principal WHERE rol = 'Jefe de Sección' AND seccion = $1 AND id != $2",
-        [seccionStr, id]
+        [seccionesArr[0], id]
       );
       if (dup.rows.length > 0) {
-        return res.status(400).json({ error: `La Sección ${seccionStr} ya está asignada a otro jefe de sección.` });
+        return res.status(400).json({ error: `La Sección ${seccionesArr[0]} ya está asignada a otro jefe de sección.` });
       }
     }
 
@@ -590,7 +626,7 @@ app.patch('/api/estructura/:id/editar', async (req, res) => {
         rol,
         zonaNum,
         rol === 'Coordinador de Zona' ? null : rutaNum,
-        rol === 'Jefe de Sección' ? seccionStr : null,
+        seccionGuardada,
         String(nombres).trim().toUpperCase(),
         String(apellidos).trim().toUpperCase(),
         telefono ? String(telefono).trim() : '',

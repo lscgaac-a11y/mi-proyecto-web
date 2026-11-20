@@ -78,7 +78,7 @@
           <section id="admin-estructura" class="card admin-seccion" style="display: none;">
             <h2>🏛️ Estructura Principal (Cunduacán)</h2>
             <p style="color: #475569; font-size: 0.9rem; margin-bottom: 16px;">
-              Control territorial definido por <strong>20 Zonas</strong>, <strong>37 Rutas</strong> y <strong>60 Secciones Electorales</strong> de Cunduacán (0609 a 0653, 0655 a 0667, 1202 y 1203).
+              <strong>20 Zonas</strong>, <strong>37 Rutas</strong> y <strong>60 Secciones Electorales</strong> (0609–0653, 0655–0667, 1202 y 1203). Coordinadores de Zona y de Ruta pueden tener 1 o más secciones; el Jefe de Sección tiene 1 sección asignada.
             </p>
 
             <!-- TARJETAS DE CONTEO Y AVANCE DE ESTRUCTURA -->
@@ -129,10 +129,10 @@
                     <select id="estRuta"></select>
                   </div>
 
-                  <!-- Sección Electoral (60 Secciones de Cunduacán) -->
-                  <div class="form-group" id="grupoEstSeccion" style="margin-bottom: 0; display: none;">
-                    <label>Sección Electoral (60 de Cunduacán):</label>
-                    <select id="estSeccion"></select>
+                  <!-- Sección Única (Solo Jefe de Sección) -->
+                  <div class="form-group" id="grupoEstSeccionUnica" style="margin-bottom: 0; display: none;">
+                    <label>Sección Asignada (1 Sección):</label>
+                    <select id="estSeccionUnica"></select>
                   </div>
 
                   <!-- Datos Personales -->
@@ -158,13 +158,27 @@
 
                 </div>
 
+                <!-- Selector Múltiple de Secciones (Para Coordinador de Zona y Coordinador de Ruta) -->
+                <div id="grupoEstSeccionesMulti" style="margin-top: 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                    <label style="margin: 0; font-weight: 600; color: #1e293b;">
+                      Secciones a Cargo (Marca 1 o más): <span id="contadorCheckSecciones" style="color: #2563eb;">0 seleccionadas</span>
+                    </label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <input type="text" id="filtroCheckSecciones" placeholder="Filtrar sección..." onkeyup="filtrarCheckboxesSecciones('est')" style="padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; width: 140px;">
+                      <button type="button" onclick="limpiarCheckboxesSecciones('est')" class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;">Limpiar</button>
+                    </div>
+                  </div>
+                  <div id="gridCheckSeccionesEst" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 6px; max-height: 145px; overflow-y: auto; padding: 4px;"></div>
+                </div>
+
                 <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
                   <button type="submit" class="btn-primary">💾 Guardar en Estructura</button>
                 </div>
               </form>
             </div>
 
-            <!-- FILTROS Y EXPORTACIÓN DE ESTRUCTURA -->
+            <!-- FILTROS Y EXPORTACIÓN JERÁRQUICA DE ESTRUCTURA -->
             <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
               <input type="text" id="buscadorEstructura" placeholder="🔍 Buscar por nombre, apellidos, localidad o sección..." onkeyup="renderEstructuraPrincipal()" style="flex: 1; min-width: 220px; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
               <select id="filtroRolEstructura" onchange="renderEstructuraPrincipal()" style="padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
@@ -176,8 +190,8 @@
               <select id="filtroZonaEstructura" onchange="renderEstructuraPrincipal()" style="padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
                 <option value="TODAS">Todas las Zonas</option>
               </select>
-              <button onclick="exportarEstructuraExcel()" class="btn-primary" style="background: #16a34a; padding: 8px 12px; font-size: 0.85rem;">📗 Excel</button>
-              <button onclick="exportarEstructuraPDF()" class="btn-primary" style="background: #dc2626; padding: 8px 12px; font-size: 0.85rem;">📕 PDF</button>
+              <button onclick="exportarEstructuraExcel()" class="btn-primary" style="background: #16a34a; padding: 8px 12px; font-size: 0.85rem;">📗 Excel Jerárquico</button>
+              <button onclick="exportarEstructuraPDF()" class="btn-primary" style="background: #dc2626; padding: 8px 12px; font-size: 0.85rem;">📕 PDF Jerárquico</button>
             </div>
 
             <!-- TABLA DE ESTRUCTURA PRINCIPAL -->
@@ -185,10 +199,10 @@
               <table class="table" style="margin: 0; width: 100%;">
                 <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.06);">
                   <tr>
-                    <th>Rol</th>
                     <th>Zona</th>
                     <th>Ruta</th>
-                    <th>Sección</th>
+                    <th>Rol</th>
+                    <th>Sección(es) Asignada(s)</th>
                     <th>Nombre Completo</th>
                     <th>Teléfono</th>
                     <th>Localidad</th>
@@ -414,10 +428,10 @@
                   📕 Promotores y Efectividad (PDF)
                 </button>
                 <button onclick="exportarEstructuraExcel()" class="btn-primary" style="background: #2563eb;">
-                  🏛️ Estructura Principal (Excel)
+                  🏛️ Estructura Jerárquica (Excel)
                 </button>
                 <button onclick="exportarEstructuraPDF()" class="btn-primary" style="background: #1d4ed8;">
-                  🏛️ Estructura Principal (PDF)
+                  🏛️ Estructura Jerárquica (PDF)
                 </button>
               </div>
             </div>
@@ -557,7 +571,7 @@
 
   <!-- MODAL EDITAR INTEGRANTE DE ESTRUCTURA PRINCIPAL -->
   <div id="modalEditarEstructura" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 560px; max-height: 90vh; overflow-y: auto;">
       <h3>Editar Integrante de Estructura Principal</h3>
       <form id="formEditarEstructura">
         <input type="hidden" id="editEstId">
@@ -577,9 +591,13 @@
           <label>Ruta (1 - 37):</label>
           <select id="editEstRuta"></select>
         </div>
-        <div class="form-group" id="grupoEditEstSeccion">
-          <label>Sección Electoral (60 de Cunduacán):</label>
-          <select id="editEstSeccion"></select>
+        <div class="form-group" id="grupoEditEstSeccionUnica">
+          <label>Sección Electoral (1 Sección):</label>
+          <select id="editEstSeccionUnica"></select>
+        </div>
+        <div class="form-group" id="grupoEditEstSeccionesMulti">
+          <label>Secciones a Cargo (1 o más): <span id="contadorEditCheckSecciones" style="color: #2563eb;">0 seleccionadas</span></label>
+          <div id="gridCheckSeccionesEdit" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; max-height: 140px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: #f8fafc;"></div>
         </div>
         <div class="form-group"><label>Nombre(s):</label><input type="text" id="editEstNombres" required></div>
         <div class="form-group"><label>Apellidos:</label><input type="text" id="editEstApellidos" required></div>
@@ -593,6 +611,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

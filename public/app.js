@@ -1225,12 +1225,21 @@ function importarExcel(tipo) {
 // ==========================================
 // 13. ESTRUCTURA PRINCIPAL (20 ZONAS, 37 RUTAS, 60 SECCIONES)
 // ==========================================
+function parsearSeccionesLista(seccionTexto) {
+  if (!seccionTexto) return [];
+  return String(seccionTexto)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
 async function cargarEstructuraPrincipal() {
   try {
     const res = await fetch('/api/estructura');
     globalEstructuraPrincipal = await res.json();
 
     poblarSelectoresEstructura();
+    renderCheckboxesSecciones('gridCheckSeccionesEst', 'est', []);
     actualizarCamposEstructura();
     actualizarContadoresEstructura();
     renderEstructuraPrincipal();
@@ -1287,34 +1296,89 @@ function poblarSelectoresEstructura() {
   selRuta.innerHTML = htmlRutas;
   if (primeraRutaLibre) selRuta.value = String(primeraRutaLibre);
 
-  // 3. 60 Secciones Electorales Oficiales de Cunduacán (0609-0653, 0655-0667, 1202 y 1203)
-  const seccionesOcupadas = new Map();
+  // 3. Selector de 1 Sección (Solo para Jefe de Sección)
+  const seccionesJefeOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Jefe de Sección' && x.seccion)
-    .forEach(x => seccionesOcupadas.set(String(x.seccion).trim(), `${x.nombres} ${x.apellidos}`));
+    .forEach(x => seccionesJefeOcupadas.set(String(x.seccion).trim(), `${x.nombres} ${x.apellidos}`));
 
-  const selSeccion = document.getElementById('estSeccion');
+  const selSeccionUnica = document.getElementById('estSeccionUnica');
   let htmlSecciones = '';
   let primeraSeccionLibre = null;
 
   SECCIONES_CUNDUACAN.forEach(sec => {
-    const ocupadoPor = seccionesOcupadas.get(sec);
+    const ocupadoPor = seccionesJefeOcupadas.get(sec);
     if (!ocupadoPor && primeraSeccionLibre === null) primeraSeccionLibre = sec;
     htmlSecciones += `<option value="${sec}">Sección ${sec}${ocupadoPor ? ` (Ocupada: ${ocupadoPor})` : ' (Disponible)'}</option>`;
   });
-  selSeccion.innerHTML = htmlSecciones;
-  if (primeraSeccionLibre) selSeccion.value = primeraSeccionLibre;
+  selSeccionUnica.innerHTML = htmlSecciones;
+  if (primeraSeccionLibre) selSeccionUnica.value = primeraSeccionLibre;
+}
+
+function renderCheckboxesSecciones(contenedorId, prefijo, seleccionadas = []) {
+  const cont = document.getElementById(contenedorId);
+  if (!cont) return;
+  const setSel = new Set(seleccionadas.map(s => String(s).trim()));
+
+  cont.innerHTML = SECCIONES_CUNDUACAN.map(sec => {
+    const checked = setSel.has(sec) ? 'checked' : '';
+    return `
+      <label class="item-check-seccion-${prefijo}" data-sec="${sec}" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; background: ${checked ? '#eff6ff' : '#ffffff'}; cursor: pointer; margin: 0;">
+        <input type="checkbox" class="chk-sec-${prefijo}" value="${sec}" ${checked} onchange="actualizarContadorCheckSecciones('${prefijo}')">
+        <span>${sec}</span>
+      </label>
+    `;
+  }).join('');
+
+  actualizarContadorCheckSecciones(prefijo);
+}
+
+function actualizarContadorCheckSecciones(prefijo) {
+  const checks = document.querySelectorAll(`.chk-sec-${prefijo}`);
+  let total = 0;
+  checks.forEach(chk => {
+    const lbl = chk.closest('label');
+    if (chk.checked) {
+      total++;
+      if (lbl) lbl.style.background = '#eff6ff';
+    } else {
+      if (lbl) lbl.style.background = '#ffffff';
+    }
+  });
+  const spanId = prefijo === 'est' ? 'contadorCheckSecciones' : 'contadorEditCheckSecciones';
+  const span = document.getElementById(spanId);
+  if (span) span.innerText = `${total} seleccionada${total === 1 ? '' : 's'}`;
+}
+
+function filtrarCheckboxesSecciones(prefijo) {
+  const filtro = document.getElementById('filtroCheckSecciones').value.trim();
+  const items = document.querySelectorAll(`.item-check-seccion-${prefijo}`);
+  items.forEach(lbl => {
+    const sec = lbl.getAttribute('data-sec');
+    lbl.style.display = sec.includes(filtro) ? 'flex' : 'none';
+  });
+}
+
+function limpiarCheckboxesSecciones(prefijo) {
+  const checks = document.querySelectorAll(`.chk-sec-${prefijo}`);
+  checks.forEach(chk => { chk.checked = false; });
+  actualizarContadorCheckSecciones(prefijo);
+}
+
+function obtenerSeccionesMarcadas(prefijo) {
+  return Array.from(document.querySelectorAll(`.chk-sec-${prefijo}:checked`)).map(chk => chk.value);
 }
 
 function actualizarCamposEstructura() {
   const rol = document.getElementById('estRol').value;
   const grupoZona = document.getElementById('grupoEstZona');
   const grupoRuta = document.getElementById('grupoEstRuta');
-  const grupoSeccion = document.getElementById('grupoEstSeccion');
+  const grupoSeccionUnica = document.getElementById('grupoEstSeccionUnica');
+  const grupoSeccionesMulti = document.getElementById('grupoEstSeccionesMulti');
 
   const selZona = document.getElementById('estZona');
   const selRuta = document.getElementById('estRuta');
-  const selSeccion = document.getElementById('estSeccion');
+  const selSeccionUnica = document.getElementById('estSeccionUnica');
 
   grupoZona.style.display = 'block';
   selZona.required = true;
@@ -1322,18 +1386,21 @@ function actualizarCamposEstructura() {
   if (rol === 'Coordinador de Zona') {
     grupoRuta.style.display = 'none';
     selRuta.required = false;
-    grupoSeccion.style.display = 'none';
-    selSeccion.required = false;
+    grupoSeccionUnica.style.display = 'none';
+    selSeccionUnica.required = false;
+    grupoSeccionesMulti.style.display = 'block';
   } else if (rol === 'Coordinador de Ruta') {
     grupoRuta.style.display = 'block';
     selRuta.required = true;
-    grupoSeccion.style.display = 'none';
-    selSeccion.required = false;
+    grupoSeccionUnica.style.display = 'none';
+    selSeccionUnica.required = false;
+    grupoSeccionesMulti.style.display = 'block';
   } else if (rol === 'Jefe de Sección') {
     grupoRuta.style.display = 'block';
     selRuta.required = true;
-    grupoSeccion.style.display = 'block';
-    selSeccion.required = true;
+    grupoSeccionUnica.style.display = 'block';
+    selSeccionUnica.required = true;
+    grupoSeccionesMulti.style.display = 'none';
   }
 }
 
@@ -1354,7 +1421,17 @@ document.getElementById('formEstructuraPrincipal').addEventListener('submit', as
   const rol = document.getElementById('estRol').value;
   const zona = document.getElementById('estZona').value;
   const ruta = document.getElementById('estRuta').value;
-  const seccion = document.getElementById('estSeccion').value;
+
+  let secciones = [];
+  if (rol === 'Jefe de Sección') {
+    secciones = [document.getElementById('estSeccionUnica').value];
+  } else {
+    secciones = obtenerSeccionesMarcadas('est');
+    if (secciones.length === 0) {
+      alert('⚠️ Debes seleccionar al menos 1 sección electoral para este rol.');
+      return;
+    }
+  }
 
   const res = await fetch('/api/estructura', {
     method: 'POST',
@@ -1363,7 +1440,7 @@ document.getElementById('formEstructuraPrincipal').addEventListener('submit', as
       rol,
       zona,
       ruta: rol === 'Coordinador de Zona' ? null : ruta,
-      seccion: rol === 'Jefe de Sección' ? seccion : null,
+      secciones,
       nombres: document.getElementById('estNombres').value.trim().toUpperCase(),
       apellidos: document.getElementById('estApellidos').value.trim().toUpperCase(),
       telefono: document.getElementById('estTelefono').value.trim(),
@@ -1378,6 +1455,7 @@ document.getElementById('formEstructuraPrincipal').addEventListener('submit', as
     document.getElementById('estApellidos').value = '';
     document.getElementById('estTelefono').value = '';
     document.getElementById('estLocalidad').value = '';
+    document.getElementById('filtroCheckSecciones').value = '';
     await cargarEstructuraPrincipal();
   } else {
     alert(`⚠️ ${data.error}`);
@@ -1405,15 +1483,26 @@ function renderEstructuraPrincipal() {
 
   tbody.innerHTML = filtrados.map(item => {
     let badgeRol = 'background: #dbeafe; color: #1e40af;';
-    if (item.rol === 'Coordinador de Ruta') badgeRol = 'background: #dcfce7; color: #166534;';
-    if (item.rol === 'Jefe de Sección') badgeRol = 'background: #fef9c3; color: #854d0e;';
+    let estiloFila = '';
+    if (item.rol === 'Coordinador de Zona') {
+      estiloFila = 'background: #f8fafc;';
+    } else if (item.rol === 'Coordinador de Ruta') {
+      badgeRol = 'background: #dcfce7; color: #166534;';
+    } else if (item.rol === 'Jefe de Sección') {
+      badgeRol = 'background: #fef9c3; color: #854d0e;';
+    }
+
+    const secs = parsearSeccionesLista(item.seccion);
+    const htmlSecciones = secs.length > 0
+      ? secs.map(s => `<span style="display:inline-block; background:#e2e8f0; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.78rem; margin:1px;">${s}</span>`).join(' ')
+      : '---';
 
     return `
-      <tr>
-        <td><span style="${badgeRol} padding: 3px 8px; border-radius: 12px; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">${item.rol}</span></td>
+      <tr style="${estiloFila}">
         <td><strong>${item.zona ? `Zona ${item.zona}` : '---'}</strong></td>
         <td>${item.ruta ? `Ruta ${item.ruta}` : '---'}</td>
-        <td>${item.seccion ? `<span style="background:#e2e8f0; padding:2px 6px; border-radius:4px; font-weight:600;">${item.seccion}</span>` : '---'}</td>
+        <td><span style="${badgeRol} padding: 3px 8px; border-radius: 12px; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">${item.rol}</span></td>
+        <td>${htmlSecciones}</td>
         <td><strong>${item.nombres} ${item.apellidos}</strong></td>
         <td>${item.telefono || '---'}</td>
         <td>${item.localidad || '---'}</td>
@@ -1429,7 +1518,8 @@ function renderEstructuraPrincipal() {
 function actualizarCamposModalEstructura() {
   const rol = document.getElementById('editEstRol').value;
   document.getElementById('grupoEditEstRuta').style.display = (rol === 'Coordinador de Zona') ? 'none' : 'block';
-  document.getElementById('grupoEditEstSeccion').style.display = (rol === 'Jefe de Sección') ? 'block' : 'none';
+  document.getElementById('grupoEditEstSeccionUnica').style.display = (rol === 'Jefe de Sección') ? 'block' : 'none';
+  document.getElementById('grupoEditEstSeccionesMulti').style.display = (rol === 'Jefe de Sección') ? 'none' : 'block';
 }
 
 function abrirModalEditarEstructura(id) {
@@ -1444,15 +1534,18 @@ function abrirModalEditarEstructura(id) {
   for (let r = 1; r <= 37; r++) optRutas += `<option value="${r}">Ruta ${r}</option>`;
   document.getElementById('editEstRuta').innerHTML = optRutas;
 
-  document.getElementById('editEstSeccion').innerHTML = SECCIONES_CUNDUACAN
+  document.getElementById('editEstSeccionUnica').innerHTML = SECCIONES_CUNDUACAN
     .map(sec => `<option value="${sec}">Sección ${sec}</option>`)
     .join('');
+
+  const secsActuales = parsearSeccionesLista(item.seccion);
+  renderCheckboxesSecciones('gridCheckSeccionesEdit', 'edit', secsActuales);
 
   document.getElementById('editEstId').value = item.id;
   document.getElementById('editEstRol').value = item.rol;
   document.getElementById('editEstZona').value = item.zona || 1;
   document.getElementById('editEstRuta').value = item.ruta || 1;
-  document.getElementById('editEstSeccion').value = item.seccion || SECCIONES_CUNDUACAN[0];
+  document.getElementById('editEstSeccionUnica').value = secsActuales[0] || SECCIONES_CUNDUACAN[0];
   document.getElementById('editEstNombres').value = item.nombres;
   document.getElementById('editEstApellidos').value = item.apellidos;
   document.getElementById('editEstTelefono').value = item.telefono || '';
@@ -1467,6 +1560,17 @@ document.getElementById('formEditarEstructura').addEventListener('submit', async
   const id = document.getElementById('editEstId').value;
   const rol = document.getElementById('editEstRol').value;
 
+  let secciones = [];
+  if (rol === 'Jefe de Sección') {
+    secciones = [document.getElementById('editEstSeccionUnica').value];
+  } else {
+    secciones = obtenerSeccionesMarcadas('edit');
+    if (secciones.length === 0) {
+      alert('⚠️ Debes seleccionar al menos 1 sección electoral.');
+      return;
+    }
+  }
+
   const res = await fetch(`/api/estructura/${id}/editar`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -1474,7 +1578,7 @@ document.getElementById('formEditarEstructura').addEventListener('submit', async
       rol,
       zona: document.getElementById('editEstZona').value,
       ruta: rol === 'Coordinador de Zona' ? null : document.getElementById('editEstRuta').value,
-      seccion: rol === 'Jefe de Sección' ? document.getElementById('editEstSeccion').value : null,
+      secciones,
       nombres: document.getElementById('editEstNombres').value.trim().toUpperCase(),
       apellidos: document.getElementById('editEstApellidos').value.trim().toUpperCase(),
       telefono: document.getElementById('editEstTelefono').value.trim(),
@@ -1498,29 +1602,148 @@ async function eliminarEstructura(id) {
   }
 }
 
+// Construye el árbol jerárquico: Zona -> Rutas -> Jefes de Sección
+function construirJerarquiaEstructura(datos) {
+  const zonasSet = new Set(datos.map(d => Number(d.zona)).filter(Boolean));
+  const zonasOrdenadas = Array.from(zonasSet).sort((a, b) => a - b);
+
+  return zonasOrdenadas.map(z => {
+    const itemsZona = datos.filter(d => Number(d.zona) === z);
+    const coordZona = itemsZona.find(d => d.rol === 'Coordinador de Zona') || null;
+    const coordsRuta = itemsZona.filter(d => d.rol === 'Coordinador de Ruta').sort((a, b) => Number(a.ruta) - Number(b.ruta));
+    const jefesSeccion = itemsZona.filter(d => d.rol === 'Jefe de Sección').sort((a, b) => String(a.seccion).localeCompare(String(b.seccion)));
+
+    const rutasSet = new Set([
+      ...coordsRuta.map(r => Number(r.ruta)).filter(Boolean),
+      ...jefesSeccion.map(j => Number(j.ruta)).filter(Boolean)
+    ]);
+    const rutasOrdenadas = Array.from(rutasSet).sort((a, b) => a - b);
+
+    const rutasArbol = rutasOrdenadas.map(r => ({
+      ruta: r,
+      coordRuta: coordsRuta.find(c => Number(c.ruta) === r) || null,
+      jefes: jefesSeccion.filter(j => Number(j.ruta) === r)
+    }));
+
+    const jefesSinRuta = jefesSeccion.filter(j => !j.ruta);
+
+    return {
+      zona: z,
+      coordZona,
+      rutas: rutasArbol,
+      jefesSinRuta,
+      totalRutas: coordsRuta.length,
+      totalJefes: jefesSeccion.length,
+      totalPersonasACargo: coordsRuta.length + jefesSeccion.length
+    };
+  });
+}
+
 async function exportarEstructuraExcel() {
   try {
     const res = await fetch('/api/estructura');
     const datos = await res.json();
     if (datos.length === 0) return alert('No hay registros en la Estructura Principal para exportar.');
 
-    const filas = datos.map(item => ({
-      'ID': item.id,
-      'Rol': item.rol,
-      'Zona': item.zona ? `Zona ${item.zona}` : '',
-      'Ruta': item.ruta ? `Ruta ${item.ruta}` : '',
-      'Sección': item.seccion || '',
-      'Nombre(s)': item.nombres,
-      'Apellidos': item.apellidos,
-      'Teléfono': item.telefono || '',
-      'Localidad': item.localidad || ''
-    }));
+    const jerarquia = construirJerarquiaEstructura(datos);
+    const filasJerarquicas = [];
+    const filasResumenZona = [];
 
-    const hoja = XLSX.utils.json_to_sheet(filas);
+    jerarquia.forEach(bloque => {
+      const cz = bloque.coordZona;
+      const nombreCZ = cz ? `${cz.nombres} ${cz.apellidos}` : 'SIN ASIGNAR';
+      const telCZ = cz ? (cz.telefono || '---') : '---';
+      const locCZ = cz ? (cz.localidad || '---') : '---';
+      const secCZ = cz ? (cz.seccion || '---') : '---';
+
+      filasResumenZona.push({
+        'Zona': `Zona ${bloque.zona}`,
+        'Coordinador de Zona': nombreCZ,
+        'Teléfono': telCZ,
+        'Localidad': locCZ,
+        'Secciones de Zona': secCZ,
+        'Coord. de Ruta': bloque.totalRutas,
+        'Jefes de Sección': bloque.totalJefes,
+        'Total Personas a Cargo': bloque.totalPersonasACargo
+      });
+
+      // Nivel 1: Coordinador de Zona
+      filasJerarquicas.push({
+        'Jerarquía': `ZONA ${bloque.zona}`,
+        'Zona': `Zona ${bloque.zona}`,
+        'Ruta': '---',
+        'Rol': 'COORDINADOR DE ZONA',
+        'Sección(es) Asignada(s)': secCZ,
+        'Nombre Completo': nombreCZ,
+        'Teléfono': telCZ,
+        'Localidad': locCZ,
+        'Personal a Cargo': `${bloque.totalRutas} Coord. Ruta | ${bloque.totalJefes} Jefes Secc. (Total: ${bloque.totalPersonasACargo})`
+      });
+
+      // Nivel 2: Rutas de la Zona
+      bloque.rutas.forEach(rObj => {
+        const cr = rObj.coordRuta;
+        const nombreCR = cr ? `${cr.nombres} ${cr.apellidos}` : 'SIN ASIGNAR';
+        const telCR = cr ? (cr.telefono || '---') : '---';
+        const locCR = cr ? (cr.localidad || '---') : '---';
+        const secCR = cr ? (cr.seccion || '---') : '---';
+
+        filasJerarquicas.push({
+          'Jerarquía': `   ↳ RUTA ${rObj.ruta}`,
+          'Zona': `Zona ${bloque.zona}`,
+          'Ruta': `Ruta ${rObj.ruta}`,
+          'Rol': 'COORDINADOR DE RUTA',
+          'Sección(es) Asignada(s)': secCR,
+          'Nombre Completo': nombreCR,
+          'Teléfono': telCR,
+          'Localidad': locCR,
+          'Personal a Cargo': `${rObj.jefes.length} Jefes de Sección`
+        });
+
+        // Nivel 3: Jefes de Sección de esa Ruta
+        rObj.jefes.forEach(j => {
+          filasJerarquicas.push({
+            'Jerarquía': `      ↳ SECCIÓN ${j.seccion}`,
+            'Zona': `Zona ${bloque.zona}`,
+            'Ruta': `Ruta ${rObj.ruta}`,
+            'Rol': 'JEFE DE SECCIÓN',
+            'Sección(es) Asignada(s)': j.seccion,
+            'Nombre Completo': `${j.nombres} ${j.apellidos}`,
+            'Teléfono': j.telefono || '---',
+            'Localidad': j.localidad || '---',
+            'Personal a Cargo': `Sección ${j.seccion}`
+          });
+        });
+      });
+
+      // Jefes de sección sin ruta explícita (si existieran)
+      bloque.jefesSinRuta.forEach(j => {
+        filasJerarquicas.push({
+          'Jerarquía': `      ↳ SECCIÓN ${j.seccion}`,
+          'Zona': `Zona ${bloque.zona}`,
+          'Ruta': '---',
+          'Rol': 'JEFE DE SECCIÓN',
+          'Sección(es) Asignada(s)': j.seccion,
+          'Nombre Completo': `${j.nombres} ${j.apellidos}`,
+          'Teléfono': j.telefono || '---',
+          'Localidad': j.localidad || '---',
+          'Personal a Cargo': `Sección ${j.seccion}`
+        });
+      });
+
+      // Fila separadora entre zonas
+      filasJerarquicas.push({});
+    });
+
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, 'Estructura_Principal');
-    XLSX.writeFile(libro, `Estructura_Principal_Cunduacan_${obtenerFechaHoy()}.xlsx`);
+    const hojaJerarquia = XLSX.utils.json_to_sheet(filasJerarquicas);
+    const hojaResumen = XLSX.utils.json_to_sheet(filasResumenZona);
+
+    XLSX.utils.book_append_sheet(libro, hojaJerarquia, 'Desglose_Jerarquico');
+    XLSX.utils.book_append_sheet(libro, hojaResumen, 'Resumen_por_Zona');
+    XLSX.writeFile(libro, `Estructura_Jerarquica_Cunduacan_${obtenerFechaHoy()}.xlsx`);
   } catch (error) {
+    console.error(error);
     alert('Error al exportar la Estructura Principal a Excel.');
   }
 }
@@ -1531,36 +1754,105 @@ async function exportarEstructuraPDF() {
     const datos = await res.json();
     if (datos.length === 0) return alert('No hay registros en la Estructura Principal para exportar.');
 
+    const jerarquia = construirJerarquiaEstructura(datos);
+    const totalZ = datos.filter(d => d.rol === 'Coordinador de Zona').length;
+    const totalR = datos.filter(d => d.rol === 'Coordinador de Ruta').length;
+    const totalS = datos.filter(d => d.rol === 'Jefe de Sección').length;
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('landscape');
 
-    doc.setFontSize(16);
-    doc.text('Estructura Principal - Cunduacán (20 Zonas, 37 Rutas, 60 Secciones)', 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Fecha de generación: ${obtenerFechaHoy()} | Total integrantes: ${datos.length} / 117`, 14, 22);
+    doc.setFontSize(15);
+    doc.text('Estructura Principal Jerárquica - Cunduacán', 14, 14);
+    doc.setFontSize(9.5);
+    doc.text(`Fecha: ${obtenerFechaHoy()} | Zonas: ${totalZ}/20 | Rutas: ${totalR}/37 | Jefes de Sección: ${totalS}/60 | Total: ${datos.length}/117`, 14, 21);
 
-    const columnas = ['Rol', 'Zona', 'Ruta', 'Secc.', 'Nombre(s)', 'Apellidos', 'Teléfono', 'Localidad'];
-    const filas = datos.map(item => [
-      item.rol,
-      item.zona ? `Zona ${item.zona}` : '---',
-      item.ruta ? `Ruta ${item.ruta}` : '---',
-      item.seccion || '---',
-      item.nombres,
-      item.apellidos,
-      item.telefono || '---',
-      item.localidad || '---'
-    ]);
+    const columnas = ['Nivel / Ubicación', 'Rol', 'Nombre Completo', 'Sección(es) a Cargo', 'Teléfono', 'Localidad', 'A Cargo'];
+    const bodyRows = [];
+
+    jerarquia.forEach(bloque => {
+      const cz = bloque.coordZona;
+      const nombreCZ = cz ? `${cz.nombres} ${cz.apellidos}` : 'SIN ASIGNAR';
+      const telCZ = cz ? (cz.telefono || '---') : '---';
+      const locCZ = cz ? (cz.localidad || '---') : '---';
+      const secCZ = cz ? (cz.seccion || '---') : '---';
+
+      // Fila destacada de Zona / Coordinador de Zona
+      bodyRows.push([
+        { content: `ZONA ${bloque.zona}`, styles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' } },
+        { content: 'COORD. DE ZONA', styles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' } },
+        { content: nombreCZ, styles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' } },
+        { content: secCZ, styles: { fillColor: [30, 64, 175], textColor: 255 } },
+        { content: telCZ, styles: { fillColor: [30, 64, 175], textColor: 255 } },
+        { content: locCZ, styles: { fillColor: [30, 64, 175], textColor: 255 } },
+        { content: `${bloque.totalRutas} Rutas | ${bloque.totalJefes} Jefes`, styles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold' } }
+      ]);
+
+      bloque.rutas.forEach(rObj => {
+        const cr = rObj.coordRuta;
+        const nombreCR = cr ? `${cr.nombres} ${cr.apellidos}` : 'SIN ASIGNAR';
+        const telCR = cr ? (cr.telefono || '---') : '---';
+        const locCR = cr ? (cr.localidad || '---') : '---';
+        const secCR = cr ? (cr.seccion || '---') : '---';
+
+        // Fila Coordinador de Ruta
+        bodyRows.push([
+          { content: `  ↳ Ruta ${rObj.ruta}`, styles: { fillColor: [220, 252, 231], fontStyle: 'bold' } },
+          { content: 'Coord. de Ruta', styles: { fillColor: [220, 252, 231], fontStyle: 'bold' } },
+          { content: nombreCR, styles: { fillColor: [220, 252, 231], fontStyle: 'bold' } },
+          { content: secCR, styles: { fillColor: [220, 252, 231] } },
+          { content: telCR, styles: { fillColor: [220, 252, 231] } },
+          { content: locCR, styles: { fillColor: [220, 252, 231] } },
+          { content: `${rObj.jefes.length} Jefes Secc.`, styles: { fillColor: [220, 252, 231] } }
+        ]);
+
+        // Filas Jefes de Sección de la Ruta
+        rObj.jefes.forEach(j => {
+          bodyRows.push([
+            `      ↳ Secc. ${j.seccion}`,
+            'Jefe de Sección',
+            `${j.nombres} ${j.apellidos}`,
+            `Sección ${j.seccion}`,
+            j.telefono || '---',
+            j.localidad || '---',
+            '---'
+          ]);
+        });
+      });
+
+      bloque.jefesSinRuta.forEach(j => {
+        bodyRows.push([
+          `      ↳ Secc. ${j.seccion}`,
+          'Jefe de Sección',
+          `${j.nombres} ${j.apellidos}`,
+          `Sección ${j.seccion}`,
+          j.telefono || '---',
+          j.localidad || '---',
+          '---'
+        ]);
+      });
+    });
 
     doc.autoTable({
       head: [columnas],
-      body: filas,
-      startY: 28,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [30, 64, 175] }
+      body: bodyRows,
+      startY: 26,
+      styles: { fontSize: 8, cellPadding: 2.5 },
+      headStyles: { fillColor: [15, 23, 42] },
+      columnStyles: {
+        0: { cellWidth: 28 },
+        1: { cellWidth: 32 },
+        2: { cellWidth: 58 },
+        3: { cellWidth: 52 },
+        4: { cellWidth: 26 },
+        5: { cellWidth: 42 },
+        6: { cellWidth: 32 }
+      }
     });
 
-    doc.save(`Estructura_Principal_Cunduacan_${obtenerFechaHoy()}.pdf`);
+    doc.save(`Estructura_Jerarquica_Cunduacan_${obtenerFechaHoy()}.pdf`);
   } catch (error) {
+    console.error(error);
     alert('Error al exportar la Estructura Principal a PDF.');
   }
 }
