@@ -110,7 +110,6 @@
               <form id="formEstructuraPrincipal">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
                   
-                  <!-- Rol -->
                   <div class="form-group" style="margin-bottom: 0;">
                     <label>Rol en la Estructura:</label>
                     <select id="estRol" onchange="actualizarCamposEstructura()" required>
@@ -120,25 +119,21 @@
                     </select>
                   </div>
 
-                  <!-- Zona (1 a 20) -->
                   <div class="form-group" id="grupoEstZona" style="margin-bottom: 0;">
                     <label>Zona Asignada (1 - 20):</label>
                     <select id="estZona" required></select>
                   </div>
 
-                  <!-- Ruta (1 a 37) -->
                   <div class="form-group" id="grupoEstRuta" style="margin-bottom: 0; display: none;">
                     <label>Ruta Asignada (1 - 37):</label>
                     <select id="estRuta"></select>
                   </div>
 
-                  <!-- Sección Única (Solo Jefe de Sección) -->
                   <div class="form-group" id="grupoEstSeccionUnica" style="margin-bottom: 0; display: none;">
                     <label>Sección Asignada (1 Sección):</label>
                     <select id="estSeccionUnica"></select>
                   </div>
 
-                  <!-- Datos Personales -->
                   <div class="form-group" style="margin-bottom: 0;">
                     <label>Nombre(s):</label>
                     <input type="text" id="estNombres" placeholder="Ej. ROBERTO CARLOS" required>
@@ -161,7 +156,7 @@
 
                 </div>
 
-                <!-- Selector Múltiple de Secciones (Para Coordinador de Zona y Coordinador de Ruta) -->
+                <!-- Selector Múltiple de Secciones -->
                 <div id="grupoEstSeccionesMulti" style="margin-top: 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px;">
                   <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
                     <label style="margin: 0; font-weight: 600; color: #1e293b;">
@@ -449,7 +444,6 @@
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
               <h3 style="margin-bottom: 12px; color: #1e293b;">📤 Exportar Datos</h3>
 
-              <!-- FILTRO POR SECCIÓN PARA EXPORTACIÓN -->
               <div style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
                 <label for="filtroSeccionExportar" style="margin: 0; font-weight: 600; color: #1e293b;">Filtrar exportación por Sección:</label>
                 <select id="filtroSeccionExportar" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #94a3b8; min-width: 180px; background: #ffffff; font-weight: 500;">
@@ -615,7 +609,7 @@
 
   </div>
 
-  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA CON ENFOQUE/ZOOM/LUZ + NATIVA + SUBIDA) -->
+  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + RECORTE DE ENCUADRE + OCR MEJORADO) -->
   <div id="modalEscanerINE" class="modal">
     <div class="modal-content" style="max-width: 560px; max-height: 92vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -623,24 +617,20 @@
         <button type="button" onclick="cerrarEscanerINE()" class="btn-secondary" style="padding: 4px 10px;">✖️</button>
       </div>
 
-      <p style="font-size: 0.83rem; color: #475569; margin-bottom: 10px;">
-        <strong>Consejo de enfoque:</strong> Mantén el teléfono a <strong>20–25 cm</strong> de la credencial, usa el <strong>Zoom</strong> para acercarla y toca la pantalla si necesitas re-enfocar.
-      </p>
-
-      <!-- VISOR DE CÁMARA EN VIVO -->
+      <!-- PASO 1: VISOR DE CÁMARA EN VIVO -->
       <div id="contenedorCamaraINE" style="display: none; margin-bottom: 12px;">
+        <p style="font-size: 0.82rem; color: #475569; margin-bottom: 8px;">
+          Mantén el teléfono a <strong>20–25 cm</strong>, usa el <strong>Zoom</strong> y toca el video si necesitas re-enfocar.
+        </p>
         <div style="position: relative; width: 100%; background: #0f172a; border-radius: 8px; overflow: hidden; cursor: crosshair;" onclick="reenfocarCamaraINE(event)">
-          <video id="videoEscanerINE" autoplay playsinline muted style="width: 100%; max-height: 290px; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.15s ease;"></video>
-          <!-- Marco guía para alinear la credencial -->
+          <video id="videoEscanerINE" autoplay playsinline muted style="width: 100%; max-height: 280px; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.15s ease;"></video>
           <div style="position: absolute; inset: 12%; border: 2px dashed #38bdf8; border-radius: 8px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.35);"></div>
-          <!-- Indicador visual de toque para enfocar -->
           <div id="indicadorEnfoqueINE" style="display: none; position: absolute; width: 54px; height: 54px; border: 2px solid #22c55e; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 10px rgba(34, 197, 94, 0.7);"></div>
           <div style="position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,0.75); color: #f8fafc; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; pointer-events: none;">
             Toca el video para enfocar
           </div>
         </div>
 
-        <!-- CONTROLES DE ENFOQUE, ZOOM Y LINTERNA -->
         <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; margin-top: 8px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
             <label for="sliderZoomINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
@@ -663,7 +653,36 @@
 
         <div style="margin-top: 8px;">
           <button type="button" onclick="capturarFotoCamaraINE()" class="btn-primary" style="width: 100%; background: #16a34a; font-size: 0.95rem;">
-            📸 Capturar y Leer INE
+            📸 Capturar Foto
+          </button>
+        </div>
+      </div>
+
+      <!-- PASO 2: ENCUADRE Y RECORTE DE LA CREDENCIAL (ELIMINA LETRAS DE MÁS DEL FONDO) -->
+      <div id="pasoRecorteINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+        <div style="font-size: 0.83rem; font-weight: 700; color: #1e40af; margin-bottom: 6px;">
+          ✂️ Encuadra SOLO la credencial (arrastra y acerca para quitar el fondo):
+        </div>
+        <div style="position: relative; width: 100%; background: #0f172a; border-radius: 6px; overflow: hidden; touch-action: none;">
+          <canvas id="canvasRecorteINE" style="width: 100%; display: block; cursor: grab;"></canvas>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+          <label for="sliderZoomRecorteINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
+            🔍 Acercar: <span id="valorZoomRecorteINE">1.0x</span>
+          </label>
+          <input type="range" id="sliderZoomRecorteINE" min="0.6" max="3.5" step="0.05" value="1" oninput="actualizarZoomRecorteINE(this.value)" style="flex: 1; cursor: pointer;">
+          <button type="button" onclick="rotarImagenRecorteINE()" class="btn-secondary" style="font-size: 0.8rem; padding: 5px 9px; white-space: nowrap;">
+            ↻ Rotar 90°
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button type="button" onclick="confirmarRecorteYLeerINE()" class="btn-primary" style="flex: 2; background: #16a34a; font-size: 0.92rem;">
+            🔍 Leer Área Encuadrada
+          </button>
+          <button type="button" onclick="leerImagenCompletaSinRecorteINE()" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
+            Leer Completa
           </button>
         </div>
       </div>
@@ -671,7 +690,7 @@
       <!-- AVISO SI LA CÁMARA NO ESTÁ DISPONIBLE -->
       <div id="avisoCamaraINE" style="display: none; background: #fefce8; border: 1px solid #fef08a; color: #854d0e; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 10px;"></div>
 
-      <!-- ALTERNATIVA DE MÁXIMA NITIDEZ: CÁMARA NATIVA DEL TELÉFONO Y SUBIDA DE ARCHIVO -->
+      <!-- BOTONES DE CÁMARA NATIVA Y SUBIDA DE ARCHIVO -->
       <div style="margin-bottom: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
         <button type="button" onclick="document.getElementById('inputCamaraNativaINE').click()" class="btn-primary" style="background: #0284c7; font-size: 0.82rem; padding: 8px 10px;">
           📱 Cámara Nativa (Máximo Enfoque)
@@ -721,8 +740,11 @@
           <button type="button" onclick="aplicarDatosINEAlFormulario()" class="btn-primary" style="flex: 2; background: #16a34a;">
             ✅ Pasar Datos al Formulario
           </button>
+          <button type="button" onclick="volverAEncuadrarINE()" class="btn-secondary" style="flex: 1; font-size: 0.82rem;">
+            ✂️ Re-encuadrar
+          </button>
           <button type="button" onclick="escanearOtroLadoINE()" class="btn-secondary" style="flex: 1; font-size: 0.82rem;">
-            🔄 Escanear Otro Lado
+            🔄 Otro Lado
           </button>
         </div>
       </div>
@@ -808,6 +830,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

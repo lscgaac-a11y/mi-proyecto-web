@@ -34,6 +34,16 @@ let linternaActivaINE = false;
 let zoomActualINE = 1.0;
 let soportaZoomHardwareINE = false;
 
+// Variables de estado del Editor de Recorte / Encuadre INE
+let canvasFuenteRecorteINE = null;
+let rotacionRecorteINE = 0;
+let zoomRecorteINE = 1.0;
+let offsetRecorteX = 0;
+let offsetRecorteY = 0;
+let arrastrandoRecorteINE = false;
+let inicioArrastreX = 0;
+let inicioArrastreY = 0;
+
 // ==========================================
 // INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
 // ==========================================
@@ -1936,7 +1946,7 @@ async function exportarEstructuraPDF() {
 }
 
 // ==========================================
-// 14. ESCÁNER DE CREDENCIAL INE (ENFOQUE + ZOOM + LUZ + NATIVA + MRZ/OCR)
+// 14. ESCÁNER DE CREDENCIAL INE (ENCUADRE + AUTO-LEVELS + NITIDEZ + MRZ/OCR)
 // ==========================================
 function enfocarCapturaManual(inputId) {
   const campo = document.getElementById(inputId);
@@ -1949,6 +1959,7 @@ function enfocarCapturaManual(inputId) {
 async function abrirEscanerINE(destino) {
   destinoFormularioINE = destino || destinoFormularioINE;
   document.getElementById('modalEscanerINE').style.display = 'flex';
+  document.getElementById('pasoRecorteINE').style.display = 'none';
   document.getElementById('resultadoEscanerINE').style.display = 'none';
   document.getElementById('estadoEscanerINE').style.display = 'none';
   document.getElementById('avisoCamaraINE').style.display = 'none';
@@ -1968,7 +1979,6 @@ async function iniciarCamaraINE() {
   const aviso = document.getElementById('avisoCamaraINE');
   const video = document.getElementById('videoEscanerINE');
 
-  // Reiniciar controles de zoom y linterna
   zoomActualINE = 1.0;
   linternaActivaINE = false;
   soportaZoomHardwareINE = false;
@@ -2010,25 +2020,22 @@ async function iniciarCamaraINE() {
     console.warn('No se pudo abrir cámara en vivo:', err);
     contCamara.style.display = 'none';
     aviso.style.display = 'block';
-    aviso.innerText = '⚠️ No se pudo abrir el visor en vivo. Usa "Cámara Nativa (Máximo Enfoque)" o "Elegir Foto / Copia Guardada".';
+    aviso.innerText = '⚠️ Usa "Cámara Nativa (Máximo Enfoque)" o "Elegir Foto / Copia Guardada" para capturar la credencial.';
   }
 }
 
-// Configura enfoque continuo, rango de zoom y disponibilidad de linterna según el teléfono
 async function configurarCapacidadesEnfoqueINE(track) {
   if (!track || typeof track.getCapabilities !== 'function') return;
 
   try {
     const caps = track.getCapabilities();
 
-    // 1. Activar enfoque automático continuo si el dispositivo lo soporta
     if (caps.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
       await track.applyConstraints({
         advanced: [{ focusMode: 'continuous' }]
       });
     }
 
-    // 2. Configurar zoom óptico/hardware si está disponible
     if (caps.zoom && typeof caps.zoom.min === 'number' && typeof caps.zoom.max === 'number' && caps.zoom.max > caps.zoom.min) {
       soportaZoomHardwareINE = true;
       const slider = document.getElementById('sliderZoomINE');
@@ -2038,7 +2045,6 @@ async function configurarCapacidadesEnfoqueINE(track) {
         slider.step = caps.zoom.step || 0.1;
         slider.value = caps.zoom.min;
       }
-      // Aplicar un ligero zoom inicial (1.4x) si es posible para evitar acercar demasiado el lente
       const zoomInicial = Math.min(1.4, caps.zoom.max);
       if (zoomInicial > caps.zoom.min) {
         await ajustarZoomINE(zoomInicial);
@@ -2046,7 +2052,6 @@ async function configurarCapacidadesEnfoqueINE(track) {
       }
     }
 
-    // 3. Mostrar botón de linterna si el teléfono tiene flash LED
     if (caps.torch) {
       const btnLinterna = document.getElementById('btnLinternaINE');
       if (btnLinterna) btnLinterna.style.display = 'inline-block';
@@ -2056,12 +2061,10 @@ async function configurarCapacidadesEnfoqueINE(track) {
   }
 }
 
-// Fuerza un ciclo de re-enfoque al tocar el video o presionar el botón "Re-enfocar"
 async function reenfocarCamaraINE(event) {
   const video = document.getElementById('videoEscanerINE');
   const indicador = document.getElementById('indicadorEnfoqueINE');
 
-  // Mostrar aro verde de enfoque donde tocó el usuario
   if (event && video && indicador) {
     const rect = video.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -2078,7 +2081,6 @@ async function reenfocarCamaraINE(event) {
     const caps = trackVideoINE.getCapabilities();
     const modos = caps.focusMode || [];
 
-    // Alternar single-shot -> continuous obliga al motor de enfoque a reajustar la distancia
     if (modos.includes('single-shot')) {
       await trackVideoINE.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
     }
@@ -2115,7 +2117,6 @@ async function ajustarZoomINE(valor) {
     }
   }
 
-  // Respaldo de zoom digital fluido en vista previa y recorte al capturar
   if (video) {
     video.style.transform = `scale(${zoomActualINE})`;
   }
@@ -2170,7 +2171,7 @@ function cerrarEscanerINE() {
   if (modal) modal.style.display = 'none';
 }
 
-async function capturarFotoCamaraINE() {
+function capturarFotoCamaraINE() {
   const video = document.getElementById('videoEscanerINE');
   if (!video || !video.videoWidth) {
     alert('⚠️ La cámara aún no está lista.');
@@ -2181,7 +2182,6 @@ async function capturarFotoCamaraINE() {
   const vh = video.videoHeight;
   const canvas = document.createElement('canvas');
 
-  // Si se usó zoom digital de respaldo, recortar exactamente el área ampliada
   if (!soportaZoomHardwareINE && zoomActualINE > 1.0) {
     const cropW = Math.round(vw / zoomActualINE);
     const cropH = Math.round(vh / zoomActualINE);
@@ -2201,8 +2201,7 @@ async function capturarFotoCamaraINE() {
 
   detenerStreamCamaraINE();
   document.getElementById('contenedorCamaraINE').style.display = 'none';
-
-  await ejecutarLecturaINE(canvas);
+  abrirEditorRecorteINE(canvas);
 }
 
 function procesarArchivoINE(event, destino) {
@@ -2213,6 +2212,7 @@ function procesarArchivoINE(event, destino) {
   document.getElementById('modalEscanerINE').style.display = 'flex';
   document.getElementById('contenedorCamaraINE').style.display = 'none';
   document.getElementById('avisoCamaraINE').style.display = 'none';
+  document.getElementById('estadoEscanerINE').style.display = 'none';
   detenerStreamCamaraINE();
 
   if (destino) {
@@ -2225,13 +2225,13 @@ function procesarArchivoINE(event, destino) {
   const lector = new FileReader();
   lector.onload = (e) => {
     const img = new Image();
-    img.onload = async () => {
+    img.onload = () => {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
-      await ejecutarLecturaINE(canvas);
+      abrirEditorRecorteINE(canvas);
     };
     img.src = e.target.result;
   };
@@ -2239,15 +2239,223 @@ function procesarArchivoINE(event, destino) {
   event.target.value = '';
 }
 
+// ==========================================
+// EDITOR DE ENCUADRE Y RECORTE DE LA CREDENCIAL
+// ==========================================
+function abrirEditorRecorteINE(canvasOrigen) {
+  canvasFuenteRecorteINE = canvasOrigen;
+  rotacionRecorteINE = 0;
+  zoomRecorteINE = 1.0;
+  offsetRecorteX = 0;
+  offsetRecorteY = 0;
+
+  const slider = document.getElementById('sliderZoomRecorteINE');
+  const label = document.getElementById('valorZoomRecorteINE');
+  if (slider) slider.value = 1.0;
+  if (label) label.innerText = '1.0x';
+
+  document.getElementById('pasoRecorteINE').style.display = 'block';
+  inicializarEventosCanvasRecorteINE();
+  dibujarVistaPreviaRecorteINE();
+}
+
+function volverAEncuadrarINE() {
+  if (!canvasFuenteRecorteINE) return;
+  document.getElementById('estadoEscanerINE').style.display = 'none';
+  document.getElementById('pasoRecorteINE').style.display = 'block';
+  dibujarVistaPreviaRecorteINE();
+}
+
+function obtenerCanvasRotadoRecorteINE() {
+  if (!canvasFuenteRecorteINE) return null;
+  const ang = ((rotacionRecorteINE % 360) + 360) % 360;
+  if (ang === 0) return canvasFuenteRecorteINE;
+
+  const c = document.createElement('canvas');
+  const w = canvasFuenteRecorteINE.width;
+  const h = canvasFuenteRecorteINE.height;
+
+  if (ang === 90 || ang === 270) {
+    c.width = h;
+    c.height = w;
+  } else {
+    c.width = w;
+    c.height = h;
+  }
+
+  const ctx = c.getContext('2d');
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((ang * Math.PI) / 180);
+  ctx.drawImage(canvasFuenteRecorteINE, -w / 2, -h / 2);
+  return c;
+}
+
+function rotarImagenRecorteINE() {
+  rotacionRecorteINE = (rotacionRecorteINE + 90) % 360;
+  offsetRecorteX = 0;
+  offsetRecorteY = 0;
+  dibujarVistaPreviaRecorteINE();
+}
+
+function actualizarZoomRecorteINE(val) {
+  zoomRecorteINE = parseFloat(val) || 1.0;
+  const label = document.getElementById('valorZoomRecorteINE');
+  if (label) label.innerText = `${zoomRecorteINE.toFixed(2)}x`;
+  dibujarVistaPreviaRecorteINE();
+}
+
+function dibujarVistaPreviaRecorteINE() {
+  const canvasVisor = document.getElementById('canvasRecorteINE');
+  const src = obtenerCanvasRotadoRecorteINE();
+  if (!canvasVisor || !src) return;
+
+  // Proporción de visor cómoda con marco interior de credencial INE (ratio 1.586:1)
+  const visorW = 500;
+  const visorH = 330;
+  canvasVisor.width = visorW;
+  canvasVisor.height = visorH;
+
+  const ctx = canvasVisor.getContext('2d');
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, visorW, visorH);
+
+  // Marco guía de credencial centrado
+  const marcoW = Math.round(visorW * 0.88);
+  const marcoH = Math.round(marcoW / 1.586);
+  const marcoX = Math.round((visorW - marcoW) / 2);
+  const marcoY = Math.round((visorH - marcoH) / 2);
+
+  // Escala base para que la imagen cubra el marco guía
+  const escalaBase = Math.max(marcoW / src.width, marcoH / src.height);
+  const escalaFinal = escalaBase * zoomRecorteINE;
+
+  const drawW = src.width * escalaFinal;
+  const drawH = src.height * escalaFinal;
+  const drawX = (visorW - drawW) / 2 + offsetRecorteX;
+  const drawY = (visorH - drawH) / 2 + offsetRecorteY;
+
+  ctx.drawImage(src, drawX, drawY, drawW, drawH);
+
+  // Oscurecer suavemente fuera del marco guía para que se vea exactamente qué se recortará
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.52)';
+  ctx.fillRect(0, 0, visorW, marcoY);
+  ctx.fillRect(0, marcoY + marcoH, visorW, visorH - (marcoY + marcoH));
+  ctx.fillRect(0, marcoY, marcoX, marcoH);
+  ctx.fillRect(marcoX + marcoW, marcoY, visorW - (marcoX + marcoW), marcoH);
+
+  // Borde del marco guía
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(marcoX, marcoY, marcoW, marcoH);
+}
+
+let eventosRecorteInicializados = false;
+function inicializarEventosCanvasRecorteINE() {
+  if (eventosRecorteInicializados) return;
+  const canvasVisor = document.getElementById('canvasRecorteINE');
+  if (!canvasVisor) return;
+  eventosRecorteInicializados = true;
+
+  const obtenerCoords = (e) => {
+    const rect = canvasVisor.getBoundingClientRect();
+    const factorX = canvasVisor.width / rect.width;
+    const factorY = canvasVisor.height / rect.height;
+    const punto = e.touches ? e.touches[0] : e;
+    return {
+      x: (punto.clientX - rect.left) * factorX,
+      y: (punto.clientY - rect.top) * factorY
+    };
+  };
+
+  const iniciar = (e) => {
+    arrastrandoRecorteINE = true;
+    const pos = obtenerCoords(e);
+    inicioArrastreX = pos.x - offsetRecorteX;
+    inicioArrastreY = pos.y - offsetRecorteY;
+  };
+
+  const mover = (e) => {
+    if (!arrastrandoRecorteINE) return;
+    if (e.cancelable) e.preventDefault();
+    const pos = obtenerCoords(e);
+    offsetRecorteX = pos.x - inicioArrastreX;
+    offsetRecorteY = pos.y - inicioArrastreY;
+    dibujarVistaPreviaRecorteINE();
+  };
+
+  const terminar = () => {
+    arrastrandoRecorteINE = false;
+  };
+
+  canvasVisor.addEventListener('mousedown', iniciar);
+  window.addEventListener('mousemove', mover);
+  window.addEventListener('mouseup', terminar);
+
+  canvasVisor.addEventListener('touchstart', iniciar, { passive: true });
+  canvasVisor.addEventListener('touchmove', mover, { passive: false });
+  canvasVisor.addEventListener('touchend', terminar);
+}
+
+async function confirmarRecorteYLeerINE() {
+  const src = obtenerCanvasRotadoRecorteINE();
+  if (!src) return;
+
+  const visorW = 500;
+  const visorH = 330;
+  const marcoW = Math.round(visorW * 0.88);
+  const marcoH = Math.round(marcoW / 1.586);
+  const marcoX = Math.round((visorW - marcoW) / 2);
+  const marcoY = Math.round((visorH - marcoH) / 2);
+
+  const escalaBase = Math.max(marcoW / src.width, marcoH / src.height);
+  const escalaFinal = escalaBase * zoomRecorteINE;
+
+  const drawW = src.width * escalaFinal;
+  const drawH = src.height * escalaFinal;
+  const drawX = (visorW - drawW) / 2 + offsetRecorteX;
+  const drawY = (visorH - drawH) / 2 + offsetRecorteY;
+
+  // Mapear el rectángulo del marco guía a coordenadas reales de alta resolución de la foto original
+  const sx = Math.max(0, Math.round((marcoX - drawX) / escalaFinal));
+  const sy = Math.max(0, Math.round((marcoY - drawY) / escalaFinal));
+  const sw = Math.min(src.width - sx, Math.round(marcoW / escalaFinal));
+  const sh = Math.min(src.height - sy, Math.round(marcoH / escalaFinal));
+
+  if (sw <= 40 || sh <= 40) {
+    alert('⚠️ Centra la credencial dentro del recuadro azul antes de leer.');
+    return;
+  }
+
+  const canvasRecortado = document.createElement('canvas');
+  canvasRecortado.width = sw;
+  canvasRecortado.height = sh;
+  const ctx = canvasRecortado.getContext('2d');
+  ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  document.getElementById('pasoRecorteINE').style.display = 'none';
+  await ejecutarLecturaINE(canvasRecortado);
+}
+
+async function leerImagenCompletaSinRecorteINE() {
+  const src = obtenerCanvasRotadoRecorteINE();
+  if (!src) return;
+  document.getElementById('pasoRecorteINE').style.display = 'none';
+  await ejecutarLecturaINE(src);
+}
+
 async function escanearOtroLadoINE() {
   document.getElementById('estadoEscanerINE').style.display = 'none';
+  document.getElementById('pasoRecorteINE').style.display = 'none';
   await iniciarCamaraINE();
 }
 
-// Preprocesa la imagen en escala de grises y alto contraste (mejora lectura de fotos y fotocopias)
+// ==========================================
+// PREPROCESAMIENTO ADAPTATIVO DE LUZ + NITIDEZ SUAVE
+// (Evita borrar letras delgadas y evita convertir hologramas en letras extra)
+// ==========================================
 function preprocesarCanvasINE(canvasOrigen) {
   const maxAncho = 1800;
-  const minAncho = 1200;
+  const minAncho = 1100;
   let w = canvasOrigen.width;
   let h = canvasOrigen.height;
 
@@ -2267,15 +2475,61 @@ function preprocesarCanvasINE(canvasOrigen) {
 
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
-  const contraste = 1.45;
+  const totalPixeles = w * h;
+  const grises = new Uint8Array(totalPixeles);
+  const histograma = new Uint32Array(256);
 
-  for (let i = 0; i < d.length; i += 4) {
-    const gris = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    let ajustado = (gris - 128) * contraste + 128;
-    ajustado = Math.max(0, Math.min(255, ajustado));
-    d[i] = ajustado;
-    d[i + 1] = ajustado;
-    d[i + 2] = ajustado;
+  // 1. Convertir a luminancia y construir histograma
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+    grises[p] = g;
+    histograma[g]++;
+  }
+
+  // 2. Calcular percentiles 4% y 94% para normalizar exposición sin quemar letras
+  let acum = 0;
+  let minVal = 0;
+  let maxVal = 255;
+  const pBajo = totalPixeles * 0.04;
+  const pAlto = totalPixeles * 0.94;
+
+  for (let i = 0; i < 256; i++) {
+    acum += histograma[i];
+    if (acum >= pBajo) { minVal = i; break; }
+  }
+  acum = 0;
+  for (let i = 0; i < 256; i++) {
+    acum += histograma[i];
+    if (acum >= pAlto) { maxVal = i; break; }
+  }
+
+  const rango = Math.max(40, maxVal - minVal);
+  const normalizados = new Uint8ClampedArray(totalPixeles);
+
+  for (let p = 0; p < totalPixeles; p++) {
+    let v = ((grises[p] - minVal) * 255) / rango;
+    // Suave realce de tinta oscura sin destruir trazos finos
+    v = (v - 128) * 1.15 + 128;
+    normalizados[p] = Math.max(0, Math.min(255, Math.round(v)));
+  }
+
+  // 3. Filtro de nitidez ligero (Unsharp / Sharpen 3x3) para definir bordes de letras
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      const centro = normalizados[idx] * 5;
+      const vecinos =
+        normalizados[idx - 1] +
+        normalizados[idx + 1] +
+        normalizados[idx - w] +
+        normalizados[idx + w];
+
+      const nitido = Math.max(0, Math.min(255, centro - vecinos));
+      const p4 = idx * 4;
+      d[p4] = nitido;
+      d[p4 + 1] = nitido;
+      d[p4 + 2] = nitido;
+    }
   }
 
   ctx.putImageData(imgData, 0, 0);
@@ -2285,7 +2539,7 @@ function preprocesarCanvasINE(canvasOrigen) {
 async function ejecutarLecturaINE(canvasOriginal) {
   const estadoDiv = document.getElementById('estadoEscanerINE');
   estadoDiv.style.display = 'block';
-  estadoDiv.innerHTML = '⏳ Optimizando nitidez de imagen y buscando códigos...';
+  estadoDiv.innerHTML = '⏳ Optimizando nitidez de credencial y buscando códigos...';
 
   try {
     const canvasMejorado = preprocesarCanvasINE(canvasOriginal);
@@ -2340,8 +2594,34 @@ async function ejecutarLecturaINE(canvasOriginal) {
     document.getElementById('resultadoEscanerINE').style.display = 'block';
   } catch (error) {
     console.error('Error al procesar INE:', error);
-    estadoDiv.innerHTML = `❌ No se pudo leer la imagen: ${error.message || 'Intenta con "Cámara Nativa (Máximo Enfoque)" o Captura Manual.'}`;
+    estadoDiv.innerHTML = `❌ No se pudo leer la imagen: ${error.message || 'Intenta re-encuadrar la credencial.'}`;
   }
+}
+
+// Limpia tokens basura de 1 letra generados por hologramas y normaliza espacios
+function limpiarLineaNombreINE(linea) {
+  if (!linea) return '';
+  const palabrasReservadas = new Set([
+    'INSTITUTO', 'NACIONAL', 'ELECTORAL', 'CREDENCIAL', 'PARA', 'VOTAR',
+    'MEXICO', 'MÉXICO', 'NOMBRE', 'DOMICILIO', 'CLAVE', 'ELECTOR',
+    'CURP', 'ESTADO', 'MUNICIPIO', 'LOCALIDAD', 'SECCION', 'SECCIÓN',
+    'EMISION', 'EMISIÓN', 'VIGENCIA', 'SEXO', 'FECHA', 'NACIMIENTO', 'ANO', 'AÑO'
+  ]);
+
+  const tokens = linea
+    .replace(/[^A-ZÁÉÍÓÚÑÜ\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(tok => {
+      if (!tok) return false;
+      if (palabrasReservadas.has(tok)) return false;
+      // Eliminar letras sueltas de 1 carácter (ruido de holograma), salvo 'Y'
+      if (tok.length === 1 && tok !== 'Y') return false;
+      return true;
+    });
+
+  return tokens.join(' ').trim();
 }
 
 // Analiza el texto OCR tanto del Reverso (MRZ IDMEX) como del Frente de la INE
@@ -2362,13 +2642,30 @@ function parsearTextoINE(texto) {
     .filter(Boolean);
 
   // A. DETECCIÓN DE REVERSO MRZ (APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2)
-  const lineaMRZNombre = lineas.find(l => l.includes('<<') && /^[A-Z<]{8,}$/.test(l.replace(/\s+/g, '')));
+  // Incluye tolerancia cuando el OCR lee '<<<' como 'KKK' o 'CCC' al final de la línea
+  const lineaMRZNombre = lineas.find(l => {
+    const sinEsp = l.replace(/\s+/g, '');
+    if (sinEsp.length < 10) return false;
+    if (/^[A-Z<]{10,}$/.test(sinEsp) && (sinEsp.includes('<<') || /(?:KKK|CCC|<<<)$/.test(sinEsp))) {
+      return true;
+    }
+    return false;
+  });
+
   if (lineaMRZNombre) {
-    const compacta = lineaMRZNombre.replace(/\s+/g, '');
-    const partes = compacta.split('<<');
+    let compacta = lineaMRZNombre
+      .replace(/\s+/g, '')
+      // Quitar relleno final de caracteres '<' o 'K'/'C' repetidos al final de la línea MRZ
+      .replace(/[<KC]{3,}$/g, '');
+
+    let partes = compacta.split('<<');
+    if (partes.length < 2) {
+      partes = compacta.split(/(?:KK|CC)/);
+    }
+
     if (partes.length >= 2) {
-      const apellidosMRZ = partes[0].replace(/<+/g, ' ').trim();
-      const nombresMRZ = partes[1].replace(/<+/g, ' ').trim();
+      const apellidosMRZ = limpiarLineaNombreINE(partes[0].replace(/<+/g, ' '));
+      const nombresMRZ = limpiarLineaNombreINE(partes.slice(1).join(' ').replace(/<+/g, ' '));
       if (apellidosMRZ.length >= 2 && nombresMRZ.length >= 2) {
         resultado.apellidos = apellidosMRZ;
         resultado.nombres = nombresMRZ;
@@ -2398,7 +2695,7 @@ function parsearTextoINE(texto) {
       for (let i = idxNombre + 1; i < Math.min(idxNombre + 6, lineas.length); i++) {
         const ln = lineas[i];
         if (/(DOMICILIO|CLAVE|CURP|FECHA|SEXO|ESTADO|MUNICIPIO|LOCALIDAD|EMISI|VIGENCIA)/.test(ln)) break;
-        const limpia = ln.replace(/[^A-ZÁÉÍÓÚÑÜ\s]/g, '').replace(/\s+/g, ' ').trim();
+        const limpia = limpiarLineaNombreINE(ln);
         if (limpia.length >= 2) {
           bloqueNombre.push(limpia);
         }
@@ -2415,13 +2712,14 @@ function parsearTextoINE(texto) {
   }
 
   // D. DETECCIÓN DE LOCALIDAD / COLONIA EN DOMICILIO
-  const lineaColonia = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
+  const lineaColonia = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG|LOC|LOCALIDAD)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
   if (lineaColonia) {
     resultado.localidad = lineaColonia
       .replace(/\b\d{5}\b/g, '')
       .replace(/,?\s*CUNDUAC[AÁ]N.*$/i, '')
       .replace(/,?\s*TAB\.?.*$/i, '')
       .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
   } else {
     const idxMpio = lineas.findIndex(l => /CUNDUAC[AÁ]N/.test(l));
@@ -2429,6 +2727,7 @@ function parsearTextoINE(texto) {
       resultado.localidad = lineas[idxMpio - 1]
         .replace(/\b\d{5}\b/g, '')
         .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, '')
+        .replace(/\s+/g, ' ')
         .trim();
     }
   }
