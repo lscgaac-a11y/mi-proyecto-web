@@ -25,6 +25,11 @@ let paginaActualPaseListaAdmin = 1;
 let paginaActualEditProm = 1;
 let paginaActualResumenProm = 1;
 
+// Variables de estado del Escáner INE
+let streamCamaraINE = null;
+let facingModeINE = 'environment';
+let destinoFormularioINE = 'admin-simp';
+
 // ==========================================
 // INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
 // ==========================================
@@ -55,6 +60,7 @@ function iniciarApp() {
 // 1. CONTROL DE VISTAS Y RUTAS
 // ==========================================
 function mostrarVista(vistaId) {
+  cerrarEscanerINE();
   document.getElementById('vista-login').style.display = 'none';
   document.getElementById('vista-cambio-password').style.display = 'none';
   document.getElementById('vista-admin').style.display = 'none';
@@ -70,6 +76,7 @@ function mostrarVista(vistaId) {
 }
 
 function cerrarSesion() {
+  cerrarEscanerINE();
   usuarioActual = null;
   localStorage.removeItem('sesionUsuario'); 
   document.getElementById('formLogin').reset();
@@ -467,8 +474,8 @@ document.getElementById('formAdminSimpatizante').addEventListener('submit', asyn
     body: JSON.stringify({
       nombre: nombreFormatoLista,
       telefono: document.getElementById('adminSimpTelefono').value,
-      seccion: document.getElementById('adminSimpSeccion').value,
-      localidad: document.getElementById('adminSimpLocalidad').value,
+      seccion: document.getElementById('adminSimpSeccion').value.trim().padStart(4, '0'),
+      localidad: document.getElementById('adminSimpLocalidad').value.trim().toUpperCase(),
       referencia: promotor
     })
   });
@@ -576,8 +583,8 @@ async function guardarPromotorComun(nombresId, apellidosId, telId, seccId, locId
     body: JSON.stringify({
       nombre: nombreCompleto,
       telefono: document.getElementById(telId).value,
-      seccion: document.getElementById(seccId).value,
-      localidad: document.getElementById(locId).value
+      seccion: document.getElementById(seccId).value.trim().padStart(4, '0'),
+      localidad: document.getElementById(locId).value.trim().toUpperCase()
     })
   });
   if (res.ok) {
@@ -828,8 +835,8 @@ document.getElementById('formSimpatizante').addEventListener('submit', async (e)
     body: JSON.stringify({
       nombre: nombreFormatoLista,
       telefono: document.getElementById('simpTelefono').value,
-      seccion: document.getElementById('simpSeccion').value,
-      localidad: document.getElementById('simpLocalidad').value,
+      seccion: document.getElementById('simpSeccion').value.trim().padStart(4, '0'),
+      localidad: document.getElementById('simpLocalidad').value.trim().toUpperCase(),
       referencia: promotor
     })
   });
@@ -1233,7 +1240,6 @@ function parsearSeccionesLista(seccionTexto) {
     .filter(Boolean);
 }
 
-// Devuelve un Map(seccion -> etiquetaOcupante) de las secciones ya ocupadas por ese rol
 function obtenerMapaSeccionesOcupadasPorRol(rol, excludeId = null) {
   const mapa = new Map();
   globalEstructuraPrincipal
@@ -1265,7 +1271,6 @@ async function cargarEstructuraPrincipal() {
 }
 
 function poblarSelectoresEstructura() {
-  // 1. Zonas (1 al 20) — bloquear las ocupadas
   const zonasOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Coordinador de Zona' && x.zona)
@@ -1294,7 +1299,6 @@ function poblarSelectoresEstructura() {
     if (valActualFiltro) filtroZona.value = valActualFiltro;
   }
 
-  // 2. Rutas (1 al 37) — bloquear las ocupadas
   const rutasOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Coordinador de Ruta' && x.ruta)
@@ -1312,7 +1316,6 @@ function poblarSelectoresEstructura() {
   selRuta.innerHTML = htmlRutas;
   if (primeraRutaLibre) selRuta.value = String(primeraRutaLibre);
 
-  // 3. Selector de 1 Sección (Solo para Jefe de Sección) — bloquear las ocupadas
   const seccionesJefeOcupadas = obtenerMapaSeccionesOcupadasPorRol('Jefe de Sección', null);
 
   const selSeccionUnica = document.getElementById('estSeccionUnica');
@@ -1586,7 +1589,6 @@ function abrirModalEditarEstructura(id) {
   const item = globalEstructuraPrincipal.find(x => x.id === id);
   if (!item) return;
 
-  // Zonas (bloquear las ocupadas por otros)
   const zonasOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Coordinador de Zona' && x.zona && x.id !== id)
@@ -1599,7 +1601,6 @@ function abrirModalEditarEstructura(id) {
   }
   document.getElementById('editEstZona').innerHTML = optZonas;
 
-  // Rutas (bloquear las ocupadas por otros)
   const rutasOcupadas = new Map();
   globalEstructuraPrincipal
     .filter(x => x.rol === 'Coordinador de Ruta' && x.ruta && x.id !== id)
@@ -1612,7 +1613,6 @@ function abrirModalEditarEstructura(id) {
   }
   document.getElementById('editEstRuta').innerHTML = optRutas;
 
-  // Sección única para Jefe de Sección (bloquear las ocupadas por otros)
   const secsJefeOcupadas = obtenerMapaSeccionesOcupadasPorRol('Jefe de Sección', id);
   document.getElementById('editEstSeccionUnica').innerHTML = SECCIONES_CUNDUACAN
     .map(sec => {
@@ -1685,7 +1685,6 @@ async function eliminarEstructura(id) {
   }
 }
 
-// Construye el árbol jerárquico: Zona -> Rutas -> Jefes de Sección
 function construirJerarquiaEstructura(datos) {
   const zonasSet = new Set(datos.map(d => Number(d.zona)).filter(Boolean));
   const zonasOrdenadas = Array.from(zonasSet).sort((a, b) => a - b);
@@ -1929,6 +1928,414 @@ async function exportarEstructuraPDF() {
   } catch (error) {
     console.error(error);
     alert('Error al exportar la Estructura Principal a PDF.');
+  }
+}
+
+// ==========================================
+// 14. ESCÁNER DE CREDENCIAL INE (CÁMARA + FOTO + MRZ/OCR + MANUAL)
+// ==========================================
+function enfocarCapturaManual(inputId) {
+  const campo = document.getElementById(inputId);
+  if (campo) {
+    campo.focus();
+    campo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+async function abrirEscanerINE(destino) {
+  destinoFormularioINE = destino || destinoFormularioINE;
+  document.getElementById('modalEscanerINE').style.display = 'flex';
+  document.getElementById('resultadoEscanerINE').style.display = 'none';
+  document.getElementById('estadoEscanerINE').style.display = 'none';
+  document.getElementById('avisoCamaraINE').style.display = 'none';
+
+  // Limpiar campos detectados previos
+  document.getElementById('ineDetectadoApellidos').value = '';
+  document.getElementById('ineDetectadoNombres').value = '';
+  document.getElementById('ineDetectadoSeccion').value = '';
+  document.getElementById('ineDetectadoLocalidad').value = '';
+  document.getElementById('ineTextoCrudoDebug').innerText = '';
+
+  await iniciarCamaraINE();
+}
+
+async function iniciarCamaraINE() {
+  detenerStreamCamaraINE();
+  const contCamara = document.getElementById('contenedorCamaraINE');
+  const aviso = document.getElementById('avisoCamaraINE');
+  const video = document.getElementById('videoEscanerINE');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    contCamara.style.display = 'none';
+    aviso.style.display = 'block';
+    aviso.innerText = '⚠️ Tu navegador requiere conexión segura (HTTPS) para abrir la cámara en vivo. Usa el botón "Elegir Foto / Copia desde Dispositivo" para tomar o subir la foto directamente.';
+    return;
+  }
+
+  try {
+    streamCamaraINE = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: facingModeINE },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      audio: false
+    });
+    video.srcObject = streamCamaraINE;
+    await video.play();
+    contCamara.style.display = 'block';
+    aviso.style.display = 'none';
+  } catch (err) {
+    console.warn('No se pudo abrir cámara en vivo:', err);
+    contCamara.style.display = 'none';
+    aviso.style.display = 'block';
+    aviso.innerText = '⚠️ No se pudo acceder a la cámara en vivo (permiso denegado o sin cámara). Puedes usar "Elegir Foto / Copia desde Dispositivo" o cerrar para captura manual.';
+  }
+}
+
+async function cambiarCamaraINE() {
+  facingModeINE = (facingModeINE === 'environment') ? 'user' : 'environment';
+  await iniciarCamaraINE();
+}
+
+function detenerStreamCamaraINE() {
+  if (streamCamaraINE) {
+    streamCamaraINE.getTracks().forEach(track => track.stop());
+    streamCamaraINE = null;
+  }
+  const video = document.getElementById('videoEscanerINE');
+  if (video) video.srcObject = null;
+}
+
+function cerrarEscanerINE() {
+  detenerStreamCamaraINE();
+  const modal = document.getElementById('modalEscanerINE');
+  if (modal) modal.style.display = 'none';
+}
+
+async function capturarFotoCamaraINE() {
+  const video = document.getElementById('videoEscanerINE');
+  if (!video || !video.videoWidth) {
+    alert('⚠️ La cámara aún no está lista.');
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  detenerStreamCamaraINE();
+  document.getElementById('contenedorCamaraINE').style.display = 'none';
+
+  await ejecutarLecturaINE(canvas);
+}
+
+function procesarArchivoINE(event, destino) {
+  if (destino) destinoFormularioINE = destino;
+  const archivo = event.target.files[0];
+  if (!archivo) return;
+
+  // Abrir modal en modo lectura de archivo
+  document.getElementById('modalEscanerINE').style.display = 'flex';
+  document.getElementById('contenedorCamaraINE').style.display = 'none';
+  document.getElementById('avisoCamaraINE').style.display = 'none';
+  detenerStreamCamaraINE();
+
+  // Si venimos directo desde el botón externo, limpiar valores previos
+  if (destino) {
+    document.getElementById('ineDetectadoApellidos').value = '';
+    document.getElementById('ineDetectadoNombres').value = '';
+    document.getElementById('ineDetectadoSeccion').value = '';
+    document.getElementById('ineDetectadoLocalidad').value = '';
+  }
+
+  const lector = new FileReader();
+  lector.onload = (e) => {
+    const img = new Image();
+    img.onload = async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      await ejecutarLecturaINE(canvas);
+    };
+    img.src = e.target.result;
+  };
+  lector.readAsDataURL(archivo);
+  event.target.value = '';
+}
+
+async function escanearOtroLadoINE() {
+  document.getElementById('estadoEscanerINE').style.display = 'none';
+  await iniciarCamaraINE();
+}
+
+// Preprocesa la imagen en escala de grises y alto contraste (mejora lectura de fotos y fotocopias)
+function preprocesarCanvasINE(canvasOrigen) {
+  const maxAncho = 1800;
+  const minAncho = 1200;
+  let w = canvasOrigen.width;
+  let h = canvasOrigen.height;
+
+  if (w > maxAncho) {
+    h = Math.round(h * (maxAncho / w));
+    w = maxAncho;
+  } else if (w < minAncho) {
+    h = Math.round(h * (minAncho / w));
+    w = minAncho;
+  }
+
+  const canvasProc = document.createElement('canvas');
+  canvasProc.width = w;
+  canvasProc.height = h;
+  const ctx = canvasProc.getContext('2d');
+  ctx.drawImage(canvasOrigen, 0, 0, w, h);
+
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  const contraste = 1.4; // Realza texto impreso en credencial o copia
+
+  for (let i = 0; i < d.length; i += 4) {
+    const gris = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    let ajustado = (gris - 128) * contraste + 128;
+    ajustado = Math.max(0, Math.min(255, ajustado));
+    d[i] = ajustado;
+    d[i + 1] = ajustado;
+    d[i + 2] = ajustado;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  return canvasProc;
+}
+
+async function ejecutarLecturaINE(canvasOriginal) {
+  const estadoDiv = document.getElementById('estadoEscanerINE');
+  estadoDiv.style.display = 'block';
+  estadoDiv.innerHTML = '⏳ Mejorando contraste de imagen y buscando códigos...';
+
+  try {
+    const canvasMejorado = preprocesarCanvasINE(canvasOriginal);
+
+    // 1. Intentar detectar QR en el reverso si existe
+    let qrDetectado = false;
+    if (typeof window.jsQR === 'function') {
+      const ctxOrig = canvasOriginal.getContext('2d');
+      const rawData = ctxOrig.getImageData(0, 0, canvasOriginal.width, canvasOriginal.height);
+      const qr = window.jsQR(rawData.data, rawData.width, rawData.height);
+      if (qr && qr.data) qrDetectado = true;
+    }
+
+    // 2. Ejecutar OCR con Tesseract.js
+    if (typeof window.Tesseract === 'undefined') {
+      throw new Error('La librería OCR aún está cargando. Intenta de nuevo en unos segundos.');
+    }
+
+    const resultadoOCR = await window.Tesseract.recognize(canvasMejorado, 'spa', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round((m.progress || 0) * 100);
+          estadoDiv.innerHTML = `🔍 Leyendo datos de la credencial INE... <strong>${pct}%</strong>`;
+        }
+      }
+    });
+
+    const textoCrudo = (resultadoOCR && resultadoOCR.data && resultadoOCR.data.text) ? resultadoOCR.data.text : '';
+    const extraido = parsearTextoINE(textoCrudo);
+
+    // Conservar datos previos si estamos escaneando el segundo lado de la misma credencial
+    const apPrev = document.getElementById('ineDetectadoApellidos').value.trim();
+    const nomPrev = document.getElementById('ineDetectadoNombres').value.trim();
+    const secPrev = document.getElementById('ineDetectadoSeccion').value.trim();
+    const locPrev = document.getElementById('ineDetectadoLocalidad').value.trim();
+
+    document.getElementById('ineDetectadoApellidos').value = extraido.apellidos || apPrev;
+    document.getElementById('ineDetectadoNombres').value = extraido.nombres || nomPrev;
+    document.getElementById('ineDetectadoSeccion').value = extraido.seccion || secPrev;
+    document.getElementById('ineDetectadoLocalidad').value = extraido.localidad || locPrev;
+
+    const debugPrev = document.getElementById('ineTextoCrudoDebug').innerText;
+    document.getElementById('ineTextoCrudoDebug').innerText = (debugPrev ? debugPrev + '\n--- LADO 2 ---\n' : '') + textoCrudo.trim();
+
+    const badge = document.getElementById('badgeTipoLecturaINE');
+    if (extraido.origen === 'MRZ') {
+      badge.innerText = qrDetectado ? 'Reverso MRZ + QR' : 'Reverso MRZ';
+    } else {
+      badge.innerText = qrDetectado ? 'Frente + QR' : 'Frente OCR';
+    }
+
+    estadoDiv.style.display = 'none';
+    document.getElementById('resultadoEscanerINE').style.display = 'block';
+  } catch (error) {
+    console.error('Error al procesar INE:', error);
+    estadoDiv.innerHTML = `❌ No se pudo leer la imagen: ${error.message || 'Intenta con mejor iluminación o usa Captura Manual.'}`;
+  }
+}
+
+// Analiza el texto OCR tanto del Reverso (MRZ IDMEX) como del Frente de la INE
+function parsearTextoINE(texto) {
+  const resultado = {
+    apellidos: '',
+    nombres: '',
+    seccion: '',
+    localidad: '',
+    origen: 'FRENTE'
+  };
+
+  if (!texto) return resultado;
+
+  const lineas = texto
+    .split(/\r?\n/)
+    .map(l => l.trim().toUpperCase())
+    .filter(Boolean);
+
+  // ---------------------------------------------------
+  // A. DETECCIÓN DE REVERSO MRZ (APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2)
+  // ---------------------------------------------------
+  const lineaMRZNombre = lineas.find(l => l.includes('<<') && /^[A-Z<]{8,}$/.test(l.replace(/\s+/g, '')));
+  if (lineaMRZNombre) {
+    const compacta = lineaMRZNombre.replace(/\s+/g, '');
+    const partes = compacta.split('<<');
+    if (partes.length >= 2) {
+      const apellidosMRZ = partes[0].replace(/<+/g, ' ').trim();
+      const nombresMRZ = partes[1].replace(/<+/g, ' ').trim();
+      if (apellidosMRZ.length >= 2 && nombresMRZ.length >= 2) {
+        resultado.apellidos = apellidosMRZ;
+        resultado.nombres = nombresMRZ;
+        resultado.origen = 'MRZ';
+      }
+    }
+  }
+
+  // ---------------------------------------------------
+  // B. DETECCIÓN DE SECCIÓN ELECTORAL (4 DÍGITOS)
+  // ---------------------------------------------------
+  const textoPlano = lineas.join(' ');
+  const matchSeccionExplicita = textoPlano.match(/(?:SECCI[OÓ0]N|SECC)\s*[:.\-]?\s*(\d{4})/);
+  if (matchSeccionExplicita) {
+    resultado.seccion = matchSeccionExplicita[1];
+  } else {
+    // Buscar cualquier número de 4 dígitos que coincida con las 60 secciones oficiales de Cunduacán
+    const candidatos4Digitos = textoPlano.match(/\b\d{4}\b/g) || [];
+    const coincidenciaCunduacan = candidatos4Digitos.find(num => SECCIONES_CUNDUACAN.includes(num));
+    if (coincidenciaCunduacan) {
+      resultado.seccion = coincidenciaCunduacan;
+    }
+  }
+
+  // ---------------------------------------------------
+  // C. DETECCIÓN DE NOMBRE EN EL FRENTE (SI NO SE LEYÓ MRZ)
+  // ---------------------------------------------------
+  if (!resultado.apellidos || !resultado.nombres) {
+    const idxNombre = lineas.findIndex(l => /\bNOMBRE\b/.test(l));
+    if (idxNombre !== -1) {
+      const bloqueNombre = [];
+      for (let i = idxNombre + 1; i < Math.min(idxNombre + 6, lineas.length); i++) {
+        const ln = lineas[i];
+        if (/(DOMICILIO|CLAVE|CURP|FECHA|SEXO|ESTADO|MUNICIPIO|LOCALIDAD|EMISI|VIGENCIA)/.test(ln)) break;
+        const limpia = ln.replace(/[^A-ZÁÉÍÓÚÑÜ\s]/g, '').replace(/\s+/g, ' ').trim();
+        if (limpia.length >= 2) {
+          bloqueNombre.push(limpia);
+        }
+      }
+
+      if (bloqueNombre.length >= 3) {
+        // Estructura estándar INE: Línea 1 Apellido Paterno, Línea 2 Apellido Materno, Línea 3+ Nombre(s)
+        resultado.apellidos = `${bloqueNombre[0]} ${bloqueNombre[1]}`.trim();
+        resultado.nombres = bloqueNombre.slice(2).join(' ').trim();
+      } else if (bloqueNombre.length === 2) {
+        resultado.apellidos = bloqueNombre[0];
+        resultado.nombres = bloqueNombre[1];
+      }
+    }
+  }
+
+  // ---------------------------------------------------
+  // D. DETECCIÓN DE LOCALIDAD / COLONIA EN DOMICILIO
+  // ---------------------------------------------------
+  const lineaColonia = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
+  if (lineaColonia) {
+    resultado.localidad = lineaColonia
+      .replace(/\b\d{5}\b/g, '')
+      .replace(/,?\s*CUNDUAC[AÁ]N.*$/i, '')
+      .replace(/,?\s*TAB\.?.*$/i, '')
+      .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, '')
+      .trim();
+  } else {
+    const idxMpio = lineas.findIndex(l => /CUNDUAC[AÁ]N/.test(l));
+    if (idxMpio > 0) {
+      resultado.localidad = lineas[idxMpio - 1]
+        .replace(/\b\d{5}\b/g, '')
+        .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, '')
+        .trim();
+    }
+  }
+
+  return resultado;
+}
+
+function aplicarDatosINEAlFormulario() {
+  const apellidos = document.getElementById('ineDetectadoApellidos').value.trim().toUpperCase();
+  const nombres = document.getElementById('ineDetectadoNombres').value.trim().toUpperCase();
+  const seccion = document.getElementById('ineDetectadoSeccion').value.trim().padStart(4, '0');
+  const localidad = document.getElementById('ineDetectadoLocalidad').value.trim().toUpperCase();
+
+  let mapaCampos = null;
+  if (destinoFormularioINE === 'admin-simp') {
+    mapaCampos = {
+      apellidos: 'adminSimpApellidos',
+      nombres: 'adminSimpNombres',
+      seccion: 'adminSimpSeccion',
+      localidad: 'adminSimpLocalidad',
+      siguiente: 'adminSimpTelefono'
+    };
+  } else if (destinoFormularioINE === 'cap-simp') {
+    mapaCampos = {
+      apellidos: 'simpApellidos',
+      nombres: 'simpNombres',
+      seccion: 'simpSeccion',
+      localidad: 'simpLocalidad',
+      siguiente: 'simpTelefono'
+    };
+  } else if (destinoFormularioINE === 'admin-prom') {
+    mapaCampos = {
+      apellidos: 'promApellidos',
+      nombres: 'promNombres',
+      seccion: 'promSeccion',
+      localidad: 'promLocalidad',
+      siguiente: 'promTelefono'
+    };
+  } else if (destinoFormularioINE === 'cap-prom') {
+    mapaCampos = {
+      apellidos: 'capPromApellidos',
+      nombres: 'capPromNombres',
+      seccion: 'capPromSeccion',
+      localidad: 'capPromLocalidad',
+      siguiente: 'capPromTelefono'
+    };
+  }
+
+  if (mapaCampos) {
+    const llenarYResaltar = (id, valor) => {
+      const el = document.getElementById(id);
+      if (el && valor && valor !== '0000') {
+        el.value = valor;
+        el.style.backgroundColor = '#dcfce7';
+        setTimeout(() => { el.style.backgroundColor = ''; }, 2200);
+      }
+    };
+
+    llenarYResaltar(mapaCampos.apellidos, apellidos);
+    llenarYResaltar(mapaCampos.nombres, nombres);
+    llenarYResaltar(mapaCampos.seccion, seccion);
+    llenarYResaltar(mapaCampos.localidad, localidad);
+
+    cerrarEscanerINE();
+
+    const sig = document.getElementById(mapaCampos.siguiente);
+    if (sig) sig.focus();
   }
 }
 

@@ -10,6 +10,9 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <!-- Librerías para Escáner INE (OCR + Lector QR) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
 
@@ -306,13 +309,33 @@
             </div>
           </section>
 
-          <!-- 7. Captura de Simpatizantes (Desde Admin) -->
+          <!-- 7. Captura de Simpatizantes (Desde Admin) con Escáner INE -->
           <section id="admin-captura" class="card admin-seccion" style="display: none;">
             <h2>Captura de Simpatizante (Panel Admin)</h2>
+
+            <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+              <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
+                🪪 Autocompletar con Credencial INE o Capturar Manualmente:
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+                <button type="button" onclick="abrirEscanerINE('admin-simp')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
+                  📷 Escanear con Cámara
+                </button>
+                <button type="button" onclick="document.getElementById('inputFotoINEAdminSimp').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
+                  🖼️ Subir Foto / Copia
+                </button>
+                <button type="button" onclick="enfocarCapturaManual('adminSimpApellidos')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
+                  ✍️ Captura Manual
+                </button>
+              </div>
+              <input type="file" id="inputFotoINEAdminSimp" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'admin-simp')">
+            </div>
+
             <form id="formAdminSimpatizante">
               <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="adminSimpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
               <div class="form-group"><label>Nombre(s):</label><input type="text" id="adminSimpNombres" placeholder="Ej. JUAN" required></div>
-              <div class="form-group"><label>Teléfono:</label><input type="text" id="adminSimpTelefono"></div>
+              <div class="form-group"><label>Teléfono:</label><input type="text" id="adminSimpTelefono" placeholder="Ej. 9141000000"></div>
               <div class="form-group"><label>Sección Electoral:</label><input type="text" id="adminSimpSeccion" placeholder="Ej. 0645" required></div>
               <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="adminSimpLocalidad" required></div>
               <div class="form-group">
@@ -345,9 +368,29 @@
             <div id="paginacionPaseListaGlobal" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
           </section>
 
-          <!-- 9. Captura de Promotor (Desde Admin) -->
+          <!-- 9. Captura de Promotor (Desde Admin) con Escáner INE -->
           <section id="admin-captura-promotor" class="card admin-seccion" style="display: none;">
             <h2>Captura de Promotor</h2>
+
+            <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+              <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
+                🪪 Autocompletar con Credencial INE o Capturar Manualmente:
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+                <button type="button" onclick="abrirEscanerINE('admin-prom')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
+                  📷 Escanear con Cámara
+                </button>
+                <button type="button" onclick="document.getElementById('inputFotoINEAdminProm').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
+                  🖼️ Subir Foto / Copia
+                </button>
+                <button type="button" onclick="enfocarCapturaManual('promNombres')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
+                  ✍️ Captura Manual
+                </button>
+              </div>
+              <input type="file" id="inputFotoINEAdminProm" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'admin-prom')">
+            </div>
+
             <form id="formAdminPromotor">
               <div class="form-group"><label>Nombre(s):</label><input type="text" id="promNombres" placeholder="Ej. JUAN CARLOS" required></div>
               <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="promApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
@@ -486,10 +529,30 @@
       <!-- Captura Simpatizante -->
       <div id="subvista-simp" class="form-centered" style="margin: 0 auto; max-width: 100%;">
         <h2>Captura de Simpatizante</h2>
+
+        <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
+            🪪 Autocompletar con Credencial INE o Capturar Manualmente:
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">
+            <button type="button" onclick="abrirEscanerINE('cap-simp')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
+              📷 Escanear con Cámara
+            </button>
+            <button type="button" onclick="document.getElementById('inputFotoINECapSimp').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
+              🖼️ Subir Foto / Copia
+            </button>
+            <button type="button" onclick="enfocarCapturaManual('simpApellidos')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
+              ✍️ Captura Manual
+            </button>
+          </div>
+          <input type="file" id="inputFotoINECapSimp" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'cap-simp')">
+        </div>
+
         <form id="formSimpatizante">
           <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="simpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
           <div class="form-group"><label>Nombre(s):</label><input type="text" id="simpNombres" placeholder="Ej. JUAN" required></div>
-          <div class="form-group"><label>Teléfono:</label><input type="text" id="simpTelefono"></div>
+          <div class="form-group"><label>Teléfono:</label><input type="text" id="simpTelefono" placeholder="Ej. 9141000000"></div>
           <div class="form-group"><label>Sección Electoral:</label><input type="text" id="simpSeccion" placeholder="Ej. 0645" required></div>
           <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="simpLocalidad" required></div>
           <div class="form-group">
@@ -504,6 +567,26 @@
       <!-- Captura Promotor por Capturista -->
       <div id="subvista-prom" class="form-centered" style="display: none; margin: 0 auto; max-width: 100%;">
         <h2>Captura de Promotor</h2>
+
+        <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
+            🪪 Autocompletar con Credencial INE o Capturar Manualmente:
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">
+            <button type="button" onclick="abrirEscanerINE('cap-prom')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
+              📷 Escanear con Cámara
+            </button>
+            <button type="button" onclick="document.getElementById('inputFotoINECapProm').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
+              🖼️ Subir Foto / Copia
+            </button>
+            <button type="button" onclick="enfocarCapturaManual('capPromNombres')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
+              ✍️ Captura Manual
+            </button>
+          </div>
+          <input type="file" id="inputFotoINECapProm" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'cap-prom')">
+        </div>
+
         <form id="formCapturistaPromotor">
           <div class="form-group"><label>Nombre(s):</label><input type="text" id="capPromNombres" placeholder="Ej. JUAN CARLOS" required></div>
           <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="capPromApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
@@ -530,6 +613,91 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + SUBIDA + REVISIÓN) -->
+  <div id="modalEscanerINE" class="modal">
+    <div class="modal-content" style="max-width: 560px; max-height: 92vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 style="margin: 0; color: #1e293b;">🪪 Escáner de Credencial INE</h3>
+        <button type="button" onclick="cerrarEscanerINE()" class="btn-secondary" style="padding: 4px 10px;">✖️</button>
+      </div>
+
+      <p style="font-size: 0.85rem; color: #475569; margin-bottom: 12px;">
+        Enfoca o sube el <strong>Frente</strong> (Nombre, Sección, Localidad) o el <strong>Reverso</strong> (Código MRZ inferior) de la credencial o fotocopia nítida.
+      </p>
+
+      <!-- VISOR DE CÁMARA EN VIVO -->
+      <div id="contenedorCamaraINE" style="display: none; margin-bottom: 12px;">
+        <div style="position: relative; width: 100%; background: #0f172a; border-radius: 8px; overflow: hidden;">
+          <video id="videoEscanerINE" autoplay playsinline muted style="width: 100%; max-height: 300px; object-fit: cover; display: block;"></video>
+          <!-- Marco guía para alinear la credencial -->
+          <div style="position: absolute; inset: 12%; border: 2px dashed #38bdf8; border-radius: 8px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.35);"></div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+          <button type="button" onclick="capturarFotoCamaraINE()" class="btn-primary" style="flex: 2; background: #16a34a;">
+            📸 Capturar y Leer INE
+          </button>
+          <button type="button" onclick="cambiarCamaraINE()" class="btn-secondary" style="flex: 1;">
+            🔄 Girar Cámara
+          </button>
+        </div>
+      </div>
+
+      <!-- AVISO SI LA CÁMARA NO ESTÁ DISPONIBLE O PARA SUBIR ARCHIVO -->
+      <div id="avisoCamaraINE" style="display: none; background: #fefce8; border: 1px solid #fef08a; color: #854d0e; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px;"></div>
+
+      <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" onclick="document.getElementById('inputFotoINEModal').click()" class="btn-secondary" style="flex: 1; font-size: 0.85rem;">
+          🖼️ Elegir Foto / Copia desde Dispositivo
+        </button>
+        <input type="file" id="inputFotoINEModal" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, null)">
+      </div>
+
+      <!-- ESTADO / PROGRESO DEL ESCANEO -->
+      <div id="estadoEscanerINE" style="display: none; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 0.88rem; color: #1e293b;"></div>
+
+      <!-- RESULTADOS DETECTADOS EDITABLES ANTES DE PASAR AL FORMULARIO -->
+      <div id="resultadoEscanerINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <strong style="color: #166534; font-size: 0.95rem;">✅ Datos Detectados (Verifica o edita):</strong>
+          <span id="badgeTipoLecturaINE" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">OCR</span>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label style="font-size: 0.82rem;">Apellidos (Paterno y Materno):</label>
+          <input type="text" id="ineDetectadoApellidos" placeholder="Apellidos">
+        </div>
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label style="font-size: 0.82rem;">Nombre(s):</label>
+          <input type="text" id="ineDetectadoNombres" placeholder="Nombre(s)">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label style="font-size: 0.82rem;">Sección:</label>
+            <input type="text" id="ineDetectadoSeccion" placeholder="Ej. 0645">
+          </div>
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label style="font-size: 0.82rem;">Localidad / Colonia:</label>
+            <input type="text" id="ineDetectadoLocalidad" placeholder="Localidad">
+          </div>
+        </div>
+
+        <details style="margin-bottom: 10px; font-size: 0.78rem; color: #64748b;">
+          <summary style="cursor: pointer;">Ver texto crudo leído de la credencial</summary>
+          <pre id="ineTextoCrudoDebug" style="white-space: pre-wrap; background: #e2e8f0; padding: 6px; border-radius: 4px; max-height: 90px; overflow-y: auto; margin-top: 4px;"></pre>
+        </details>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" onclick="aplicarDatosINEAlFormulario()" class="btn-primary" style="flex: 2; background: #16a34a;">
+            ✅ Pasar Datos al Formulario
+          </button>
+          <button type="button" onclick="escanearOtroLadoINE()" class="btn-secondary" style="flex: 1; font-size: 0.82rem;">
+            🔄 Escanear Otro Lado
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL EDITAR SIMPATIZANTE -->
@@ -611,6 +779,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
