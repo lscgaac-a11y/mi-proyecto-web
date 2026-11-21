@@ -27,8 +27,12 @@ let paginaActualResumenProm = 1;
 
 // Variables de estado del Escáner INE
 let streamCamaraINE = null;
+let trackVideoINE = null;
 let facingModeINE = 'environment';
 let destinoFormularioINE = 'admin-simp';
+let linternaActivaINE = false;
+let zoomActualINE = 1.0;
+let soportaZoomHardwareINE = false;
 
 // ==========================================
 // INICIALIZACIÓN SEGURA Y MANTENER SESIÓN
@@ -1932,7 +1936,7 @@ async function exportarEstructuraPDF() {
 }
 
 // ==========================================
-// 14. ESCÁNER DE CREDENCIAL INE (CÁMARA + FOTO + MRZ/OCR + MANUAL)
+// 14. ESCÁNER DE CREDENCIAL INE (ENFOQUE + ZOOM + LUZ + NATIVA + MRZ/OCR)
 // ==========================================
 function enfocarCapturaManual(inputId) {
   const campo = document.getElementById(inputId);
@@ -1949,7 +1953,6 @@ async function abrirEscanerINE(destino) {
   document.getElementById('estadoEscanerINE').style.display = 'none';
   document.getElementById('avisoCamaraINE').style.display = 'none';
 
-  // Limpiar campos detectados previos
   document.getElementById('ineDetectadoApellidos').value = '';
   document.getElementById('ineDetectadoNombres').value = '';
   document.getElementById('ineDetectadoSeccion').value = '';
@@ -1965,10 +1968,22 @@ async function iniciarCamaraINE() {
   const aviso = document.getElementById('avisoCamaraINE');
   const video = document.getElementById('videoEscanerINE');
 
+  // Reiniciar controles de zoom y linterna
+  zoomActualINE = 1.0;
+  linternaActivaINE = false;
+  soportaZoomHardwareINE = false;
+  const sliderZoom = document.getElementById('sliderZoomINE');
+  const valorZoom = document.getElementById('valorZoomINE');
+  const btnLinterna = document.getElementById('btnLinternaINE');
+  if (sliderZoom) { sliderZoom.min = 1; sliderZoom.max = 3; sliderZoom.step = 0.1; sliderZoom.value = 1; }
+  if (valorZoom) valorZoom.innerText = '1.0x';
+  if (btnLinterna) { btnLinterna.style.display = 'none'; btnLinterna.innerText = '🔦 Luz: OFF'; }
+  if (video) video.style.transform = 'scale(1)';
+
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     contCamara.style.display = 'none';
     aviso.style.display = 'block';
-    aviso.innerText = '⚠️ Tu navegador requiere conexión segura (HTTPS) para abrir la cámara en vivo. Usa el botón "Elegir Foto / Copia desde Dispositivo" para tomar o subir la foto directamente.';
+    aviso.innerText = '⚠️ Tu navegador requiere HTTPS para abrir la cámara en vivo. Usa el botón azul "Cámara Nativa (Máximo Enfoque)".';
     return;
   }
 
@@ -1981,15 +1996,146 @@ async function iniciarCamaraINE() {
       },
       audio: false
     });
+
     video.srcObject = streamCamaraINE;
     await video.play();
     contCamara.style.display = 'block';
     aviso.style.display = 'none';
+
+    trackVideoINE = streamCamaraINE.getVideoTracks()[0] || null;
+    if (trackVideoINE) {
+      await configurarCapacidadesEnfoqueINE(trackVideoINE);
+    }
   } catch (err) {
     console.warn('No se pudo abrir cámara en vivo:', err);
     contCamara.style.display = 'none';
     aviso.style.display = 'block';
-    aviso.innerText = '⚠️ No se pudo acceder a la cámara en vivo (permiso denegado o sin cámara). Puedes usar "Elegir Foto / Copia desde Dispositivo" o cerrar para captura manual.';
+    aviso.innerText = '⚠️ No se pudo abrir el visor en vivo. Usa "Cámara Nativa (Máximo Enfoque)" o "Elegir Foto / Copia Guardada".';
+  }
+}
+
+// Configura enfoque continuo, rango de zoom y disponibilidad de linterna según el teléfono
+async function configurarCapacidadesEnfoqueINE(track) {
+  if (!track || typeof track.getCapabilities !== 'function') return;
+
+  try {
+    const caps = track.getCapabilities();
+
+    // 1. Activar enfoque automático continuo si el dispositivo lo soporta
+    if (caps.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+      await track.applyConstraints({
+        advanced: [{ focusMode: 'continuous' }]
+      });
+    }
+
+    // 2. Configurar zoom óptico/hardware si está disponible
+    if (caps.zoom && typeof caps.zoom.min === 'number' && typeof caps.zoom.max === 'number' && caps.zoom.max > caps.zoom.min) {
+      soportaZoomHardwareINE = true;
+      const slider = document.getElementById('sliderZoomINE');
+      if (slider) {
+        slider.min = caps.zoom.min;
+        slider.max = Math.min(caps.zoom.max, 4);
+        slider.step = caps.zoom.step || 0.1;
+        slider.value = caps.zoom.min;
+      }
+      // Aplicar un ligero zoom inicial (1.4x) si es posible para evitar acercar demasiado el lente
+      const zoomInicial = Math.min(1.4, caps.zoom.max);
+      if (zoomInicial > caps.zoom.min) {
+        await ajustarZoomINE(zoomInicial);
+        if (slider) slider.value = zoomInicial;
+      }
+    }
+
+    // 3. Mostrar botón de linterna si el teléfono tiene flash LED
+    if (caps.torch) {
+      const btnLinterna = document.getElementById('btnLinternaINE');
+      if (btnLinterna) btnLinterna.style.display = 'inline-block';
+    }
+  } catch (e) {
+    console.warn('Capacidades avanzadas de cámara parcialmente soportadas:', e);
+  }
+}
+
+// Fuerza un ciclo de re-enfoque al tocar el video o presionar el botón "Re-enfocar"
+async function reenfocarCamaraINE(event) {
+  const video = document.getElementById('videoEscanerINE');
+  const indicador = document.getElementById('indicadorEnfoqueINE');
+
+  // Mostrar aro verde de enfoque donde tocó el usuario
+  if (event && video && indicador) {
+    const rect = video.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    indicador.style.left = `${x}px`;
+    indicador.style.top = `${y}px`;
+    indicador.style.display = 'block';
+    setTimeout(() => { indicador.style.display = 'none'; }, 900);
+  }
+
+  if (!trackVideoINE || typeof trackVideoINE.getCapabilities !== 'function') return;
+
+  try {
+    const caps = trackVideoINE.getCapabilities();
+    const modos = caps.focusMode || [];
+
+    // Alternar single-shot -> continuous obliga al motor de enfoque a reajustar la distancia
+    if (modos.includes('single-shot')) {
+      await trackVideoINE.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
+    }
+    if (modos.includes('continuous')) {
+      setTimeout(async () => {
+        try {
+          if (trackVideoINE) {
+            await trackVideoINE.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+          }
+        } catch (err) { /* ignorar */ }
+      }, 350);
+    }
+  } catch (e) {
+    console.warn('No se pudo forzar re-enfoque por hardware:', e);
+  }
+}
+
+async function ajustarZoomINE(valor) {
+  zoomActualINE = parseFloat(valor) || 1.0;
+  const labelZoom = document.getElementById('valorZoomINE');
+  if (labelZoom) labelZoom.innerText = `${zoomActualINE.toFixed(1)}x`;
+
+  const video = document.getElementById('videoEscanerINE');
+
+  if (soportaZoomHardwareINE && trackVideoINE) {
+    try {
+      await trackVideoINE.applyConstraints({
+        advanced: [{ zoom: zoomActualINE }]
+      });
+      if (video) video.style.transform = 'scale(1)';
+      return;
+    } catch (e) {
+      soportaZoomHardwareINE = false;
+    }
+  }
+
+  // Respaldo de zoom digital fluido en vista previa y recorte al capturar
+  if (video) {
+    video.style.transform = `scale(${zoomActualINE})`;
+  }
+}
+
+async function alternarLinternaINE() {
+  if (!trackVideoINE) return;
+  const btn = document.getElementById('btnLinternaINE');
+  try {
+    linternaActivaINE = !linternaActivaINE;
+    await trackVideoINE.applyConstraints({
+      advanced: [{ torch: linternaActivaINE }]
+    });
+    if (btn) {
+      btn.innerText = linternaActivaINE ? '🔦 Luz: ON' : '🔦 Luz: OFF';
+      btn.style.background = linternaActivaINE ? '#eab308' : '';
+      btn.style.color = linternaActivaINE ? '#0f172a' : '';
+    }
+  } catch (e) {
+    alert('⚠️ No se pudo encender la linterna en este dispositivo.');
   }
 }
 
@@ -1999,12 +2145,23 @@ async function cambiarCamaraINE() {
 }
 
 function detenerStreamCamaraINE() {
+  if (trackVideoINE && linternaActivaINE) {
+    try {
+      trackVideoINE.applyConstraints({ advanced: [{ torch: false }] });
+    } catch (e) { /* ignorar */ }
+  }
+  linternaActivaINE = false;
+  trackVideoINE = null;
+
   if (streamCamaraINE) {
     streamCamaraINE.getTracks().forEach(track => track.stop());
     streamCamaraINE = null;
   }
   const video = document.getElementById('videoEscanerINE');
-  if (video) video.srcObject = null;
+  if (video) {
+    video.srcObject = null;
+    video.style.transform = 'scale(1)';
+  }
 }
 
 function cerrarEscanerINE() {
@@ -2020,11 +2177,27 @@ async function capturarFotoCamaraINE() {
     return;
   }
 
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // Si se usó zoom digital de respaldo, recortar exactamente el área ampliada
+  if (!soportaZoomHardwareINE && zoomActualINE > 1.0) {
+    const cropW = Math.round(vw / zoomActualINE);
+    const cropH = Math.round(vh / zoomActualINE);
+    const cropX = Math.round((vw - cropW) / 2);
+    const cropY = Math.round((vh - cropH) / 2);
+
+    canvas.width = cropW;
+    canvas.height = cropH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  } else {
+    canvas.width = vw;
+    canvas.height = vh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, vw, vh);
+  }
 
   detenerStreamCamaraINE();
   document.getElementById('contenedorCamaraINE').style.display = 'none';
@@ -2037,13 +2210,11 @@ function procesarArchivoINE(event, destino) {
   const archivo = event.target.files[0];
   if (!archivo) return;
 
-  // Abrir modal en modo lectura de archivo
   document.getElementById('modalEscanerINE').style.display = 'flex';
   document.getElementById('contenedorCamaraINE').style.display = 'none';
   document.getElementById('avisoCamaraINE').style.display = 'none';
   detenerStreamCamaraINE();
 
-  // Si venimos directo desde el botón externo, limpiar valores previos
   if (destino) {
     document.getElementById('ineDetectadoApellidos').value = '';
     document.getElementById('ineDetectadoNombres').value = '';
@@ -2096,7 +2267,7 @@ function preprocesarCanvasINE(canvasOrigen) {
 
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
-  const contraste = 1.4; // Realza texto impreso en credencial o copia
+  const contraste = 1.45;
 
   for (let i = 0; i < d.length; i += 4) {
     const gris = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -2114,7 +2285,7 @@ function preprocesarCanvasINE(canvasOrigen) {
 async function ejecutarLecturaINE(canvasOriginal) {
   const estadoDiv = document.getElementById('estadoEscanerINE');
   estadoDiv.style.display = 'block';
-  estadoDiv.innerHTML = '⏳ Mejorando contraste de imagen y buscando códigos...';
+  estadoDiv.innerHTML = '⏳ Optimizando nitidez de imagen y buscando códigos...';
 
   try {
     const canvasMejorado = preprocesarCanvasINE(canvasOriginal);
@@ -2145,7 +2316,6 @@ async function ejecutarLecturaINE(canvasOriginal) {
     const textoCrudo = (resultadoOCR && resultadoOCR.data && resultadoOCR.data.text) ? resultadoOCR.data.text : '';
     const extraido = parsearTextoINE(textoCrudo);
 
-    // Conservar datos previos si estamos escaneando el segundo lado de la misma credencial
     const apPrev = document.getElementById('ineDetectadoApellidos').value.trim();
     const nomPrev = document.getElementById('ineDetectadoNombres').value.trim();
     const secPrev = document.getElementById('ineDetectadoSeccion').value.trim();
@@ -2170,7 +2340,7 @@ async function ejecutarLecturaINE(canvasOriginal) {
     document.getElementById('resultadoEscanerINE').style.display = 'block';
   } catch (error) {
     console.error('Error al procesar INE:', error);
-    estadoDiv.innerHTML = `❌ No se pudo leer la imagen: ${error.message || 'Intenta con mejor iluminación o usa Captura Manual.'}`;
+    estadoDiv.innerHTML = `❌ No se pudo leer la imagen: ${error.message || 'Intenta con "Cámara Nativa (Máximo Enfoque)" o Captura Manual.'}`;
   }
 }
 
@@ -2191,9 +2361,7 @@ function parsearTextoINE(texto) {
     .map(l => l.trim().toUpperCase())
     .filter(Boolean);
 
-  // ---------------------------------------------------
   // A. DETECCIÓN DE REVERSO MRZ (APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2)
-  // ---------------------------------------------------
   const lineaMRZNombre = lineas.find(l => l.includes('<<') && /^[A-Z<]{8,}$/.test(l.replace(/\s+/g, '')));
   if (lineaMRZNombre) {
     const compacta = lineaMRZNombre.replace(/\s+/g, '');
@@ -2209,15 +2377,12 @@ function parsearTextoINE(texto) {
     }
   }
 
-  // ---------------------------------------------------
   // B. DETECCIÓN DE SECCIÓN ELECTORAL (4 DÍGITOS)
-  // ---------------------------------------------------
   const textoPlano = lineas.join(' ');
   const matchSeccionExplicita = textoPlano.match(/(?:SECCI[OÓ0]N|SECC)\s*[:.\-]?\s*(\d{4})/);
   if (matchSeccionExplicita) {
     resultado.seccion = matchSeccionExplicita[1];
   } else {
-    // Buscar cualquier número de 4 dígitos que coincida con las 60 secciones oficiales de Cunduacán
     const candidatos4Digitos = textoPlano.match(/\b\d{4}\b/g) || [];
     const coincidenciaCunduacan = candidatos4Digitos.find(num => SECCIONES_CUNDUACAN.includes(num));
     if (coincidenciaCunduacan) {
@@ -2225,9 +2390,7 @@ function parsearTextoINE(texto) {
     }
   }
 
-  // ---------------------------------------------------
   // C. DETECCIÓN DE NOMBRE EN EL FRENTE (SI NO SE LEYÓ MRZ)
-  // ---------------------------------------------------
   if (!resultado.apellidos || !resultado.nombres) {
     const idxNombre = lineas.findIndex(l => /\bNOMBRE\b/.test(l));
     if (idxNombre !== -1) {
@@ -2242,7 +2405,6 @@ function parsearTextoINE(texto) {
       }
 
       if (bloqueNombre.length >= 3) {
-        // Estructura estándar INE: Línea 1 Apellido Paterno, Línea 2 Apellido Materno, Línea 3+ Nombre(s)
         resultado.apellidos = `${bloqueNombre[0]} ${bloqueNombre[1]}`.trim();
         resultado.nombres = bloqueNombre.slice(2).join(' ').trim();
       } else if (bloqueNombre.length === 2) {
@@ -2252,9 +2414,7 @@ function parsearTextoINE(texto) {
     }
   }
 
-  // ---------------------------------------------------
   // D. DETECCIÓN DE LOCALIDAD / COLONIA EN DOMICILIO
-  // ---------------------------------------------------
   const lineaColonia = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
   if (lineaColonia) {
     resultado.localidad = lineaColonia
