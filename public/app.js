@@ -18,6 +18,27 @@ const SECCIONES_CUNDUACAN = [
   '1203'
 ];
 
+// CATÁLOGO DE LOCALIDADES / COLONIAS DE CUNDUACÁN PARA AUTOCORRECCIÓN OCR
+const LOCALIDADES_CUNDUACAN = [
+  'CENTRO', 'COL. CENTRO', 'COL. OBRERA', 'COL. ESMERALDA', 'COL. MANUEL SANCHEZ MARMOL',
+  'COL. MAGISTERIAL', 'COL. EL CARMEN', 'COL. EMILIANO ZAPATA', 'COL. BUENAVISTA',
+  'FRACC. LAS PALMAS', 'FRACC. LOS ANGELES', 'FRACC. SAN ANTONIO', 'FRACC. BICENTENARIO',
+  'R/A. HUIMANGO 1RA. SECCION', 'R/A. HUIMANGO 2DA. SECCION', 'R/A. HUIMANGO 3RA. SECCION',
+  'R/A. CUMUAPA 1RA. SECCION', 'R/A. CUMUAPA 2DA. SECCION', 'R/A. CUMUAPA 3RA. SECCION',
+  'R/A. CUCUYULAPA 1RA. SECCION', 'R/A. CUCUYULAPA 2DA. SECCION',
+  'R/A. PECHUCALCO 1RA. SECCION', 'R/A. PECHUCALCO 2DA. SECCION',
+  'R/A. PIEDRA 1RA. SECCION', 'R/A. PIEDRA 2DA. SECCION', 'R/A. PIEDRA 3RA. SECCION', 'R/A. PIEDRA 4TA. SECCION',
+  'R/A. YOLOXOCHITL 1RA. SECCION', 'R/A. YOLOXOCHITL 2DA. SECCION', 'R/A. YOLOXOCHITL 3RA. SECCION',
+  'R/A. MIAHUATLAN 1RA. SECCION', 'R/A. MIAHUATLAN 2DA. SECCION', 'R/A. MIAHUATLAN 3RA. SECCION',
+  'R/A. SAN PEDRO CUMUAPA', 'R/A. MARIN', 'R/A. LA LUCHA', 'R/A. ANTARTIDA',
+  'R/A. PLATANO Y CACAO', 'R/A. SAN BENITO', 'R/A. RANCHO NUEVO', 'R/A. DOS CEIBAS',
+  'R/A. MANTILLA', 'R/A. EL MOTÉ', 'R/A. REFORMA', 'R/A. COLIMA',
+  'POB. LIBERTAD', 'POB. TULIPAN', 'POB. AMADO GOMEZ', 'POB. CARLOS ROVIROSA',
+  'POB. GREGORIO MENDEZ', 'POB. FELIPE CARRILLO PUERTO', 'POB. ONCE DE FEBRERO',
+  'EJ. TIERRA Y LIBERTAD', 'EJ. BENITO JUAREZ', 'EJ. MORELOS', 'EJ. LA ENCRUCIJADA',
+  'EJ. SAN ANTONIO', 'EJ. BUENAVISTA', 'EJ. EMILIANO ZAPATA'
+];
+
 const ITEMS_POR_PAGINA = 50;
 let paginaActualLista = 1;
 let paginaActualEditSimp = 1;
@@ -1946,7 +1967,7 @@ async function exportarEstructuraPDF() {
 }
 
 // ==========================================
-// 14. ESCÁNER DE CREDENCIAL INE (ENCUADRE + AUTO-LEVELS + NITIDEZ + MRZ/OCR)
+// 14. ESCÁNER DE CREDENCIAL INE POR ZONAS ROI + BINARIZACIÓN ADAPTATIVA
 // ==========================================
 function enfocarCapturaManual(inputId) {
   const campo = document.getElementById(inputId);
@@ -2309,7 +2330,6 @@ function dibujarVistaPreviaRecorteINE() {
   const src = obtenerCanvasRotadoRecorteINE();
   if (!canvasVisor || !src) return;
 
-  // Proporción de visor cómoda con marco interior de credencial INE (ratio 1.586:1)
   const visorW = 500;
   const visorH = 330;
   canvasVisor.width = visorW;
@@ -2319,13 +2339,12 @@ function dibujarVistaPreviaRecorteINE() {
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, visorW, visorH);
 
-  // Marco guía de credencial centrado
+  // Marco guía proporción tarjeta ID-1 (1.586:1)
   const marcoW = Math.round(visorW * 0.88);
   const marcoH = Math.round(marcoW / 1.586);
   const marcoX = Math.round((visorW - marcoW) / 2);
   const marcoY = Math.round((visorH - marcoH) / 2);
 
-  // Escala base para que la imagen cubra el marco guía
   const escalaBase = Math.max(marcoW / src.width, marcoH / src.height);
   const escalaFinal = escalaBase * zoomRecorteINE;
 
@@ -2336,14 +2355,12 @@ function dibujarVistaPreviaRecorteINE() {
 
   ctx.drawImage(src, drawX, drawY, drawW, drawH);
 
-  // Oscurecer suavemente fuera del marco guía para que se vea exactamente qué se recortará
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.52)';
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
   ctx.fillRect(0, 0, visorW, marcoY);
   ctx.fillRect(0, marcoY + marcoH, visorW, visorH - (marcoY + marcoH));
   ctx.fillRect(0, marcoY, marcoX, marcoH);
   ctx.fillRect(marcoX + marcoW, marcoY, visorW - (marcoX + marcoW), marcoH);
 
-  // Borde del marco guía
   ctx.strokeStyle = '#38bdf8';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(marcoX, marcoY, marcoW, marcoH);
@@ -2400,6 +2417,14 @@ async function confirmarRecorteYLeerINE() {
   const src = obtenerCanvasRotadoRecorteINE();
   if (!src) return;
 
+  const modoLado = document.getElementById('selectLadoINE').value;
+  document.getElementById('pasoRecorteINE').style.display = 'none';
+
+  if (modoLado === 'COMPLETA') {
+    await ejecutarLecturaINE(src, 'COMPLETA');
+    return;
+  }
+
   const visorW = 500;
   const visorH = 330;
   const marcoW = Math.round(visorW * 0.88);
@@ -2415,7 +2440,6 @@ async function confirmarRecorteYLeerINE() {
   const drawX = (visorW - drawW) / 2 + offsetRecorteX;
   const drawY = (visorH - drawH) / 2 + offsetRecorteY;
 
-  // Mapear el rectángulo del marco guía a coordenadas reales de alta resolución de la foto original
   const sx = Math.max(0, Math.round((marcoX - drawX) / escalaFinal));
   const sy = Math.max(0, Math.round((marcoY - drawY) / escalaFinal));
   const sw = Math.min(src.width - sx, Math.round(marcoW / escalaFinal));
@@ -2423,24 +2447,17 @@ async function confirmarRecorteYLeerINE() {
 
   if (sw <= 40 || sh <= 40) {
     alert('⚠️ Centra la credencial dentro del recuadro azul antes de leer.');
+    document.getElementById('pasoRecorteINE').style.display = 'block';
     return;
   }
 
-  const canvasRecortado = document.createElement('canvas');
-  canvasRecortado.width = sw;
-  canvasRecortado.height = sh;
-  const ctx = canvasRecortado.getContext('2d');
+  const canvasTarjeta = document.createElement('canvas');
+  canvasTarjeta.width = sw;
+  canvasTarjeta.height = sh;
+  const ctx = canvasTarjeta.getContext('2d');
   ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
 
-  document.getElementById('pasoRecorteINE').style.display = 'none';
-  await ejecutarLecturaINE(canvasRecortado);
-}
-
-async function leerImagenCompletaSinRecorteINE() {
-  const src = obtenerCanvasRotadoRecorteINE();
-  if (!src) return;
-  document.getElementById('pasoRecorteINE').style.display = 'none';
-  await ejecutarLecturaINE(src);
+  await ejecutarLecturaINE(canvasTarjeta, modoLado);
 }
 
 async function escanearOtroLadoINE() {
@@ -2450,289 +2467,406 @@ async function escanearOtroLadoINE() {
 }
 
 // ==========================================
-// PREPROCESAMIENTO ADAPTATIVO DE LUZ + NITIDEZ SUAVE
-// (Evita borrar letras delgadas y evita convertir hologramas en letras extra)
+// EXTRACCIÓN DE ZONA (ROI) + BINARIZACIÓN ADAPTATIVA LOCAL (BRADLEY-ROTH)
+// Elimina ondas rosas/grises y hologramas dejando tinta negra pura sobre blanco puro
 // ==========================================
-function preprocesarCanvasINE(canvasOrigen) {
-  const maxAncho = 1800;
-  const minAncho = 1100;
-  let w = canvasOrigen.width;
-  let h = canvasOrigen.height;
+function recortarSubZonaCanvas(canvasTarjeta, rx, ry, rw, rh, anchoMinimo = 950) {
+  const sx = Math.max(0, Math.round(canvasTarjeta.width * rx));
+  const sy = Math.max(0, Math.round(canvasTarjeta.height * ry));
+  const sw = Math.min(canvasTarjeta.width - sx, Math.round(canvasTarjeta.width * rw));
+  const sh = Math.min(canvasTarjeta.height - sy, Math.round(canvasTarjeta.height * rh));
 
-  if (w > maxAncho) {
-    h = Math.round(h * (maxAncho / w));
-    w = maxAncho;
-  } else if (w < minAncho) {
-    h = Math.round(h * (minAncho / w));
-    w = minAncho;
-  }
+  const escala = sw < anchoMinimo ? Math.min(2.5, anchoMinimo / Math.max(1, sw)) : 1;
+  const outW = Math.round(sw * escala);
+  const outH = Math.round(sh * escala);
 
-  const canvasProc = document.createElement('canvas');
-  canvasProc.width = w;
-  canvasProc.height = h;
-  const ctx = canvasProc.getContext('2d');
+  const c = document.createElement('canvas');
+  c.width = outW;
+  c.height = outH;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(canvasTarjeta, sx, sy, sw, sh, 0, 0, outW, outH);
+  return c;
+}
+
+function binarizarAdaptativoCanvas(canvasOrigen, factorUmbral = 0.88) {
+  const w = canvasOrigen.width;
+  const h = canvasOrigen.height;
+  const canvasOut = document.createElement('canvas');
+  canvasOut.width = w;
+  canvasOut.height = h;
+  const ctx = canvasOut.getContext('2d');
   ctx.drawImage(canvasOrigen, 0, 0, w, h);
 
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
-  const totalPixeles = w * h;
-  const grises = new Uint8Array(totalPixeles);
-  const histograma = new Uint32Array(256);
+  const n = w * h;
+  const gray = new Uint8Array(n);
 
-  // 1. Convertir a luminancia y construir histograma
+  // Ponderar el canal rojo (0.55) aclara el fondo rosa/magenta de la INE y resalta la tinta negra
   for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-    grises[p] = g;
-    histograma[g]++;
+    gray[p] = Math.round(0.55 * d[i] + 0.35 * d[i + 1] + 0.10 * d[i + 2]);
   }
 
-  // 2. Calcular percentiles 4% y 94% para normalizar exposición sin quemar letras
-  let acum = 0;
-  let minVal = 0;
-  let maxVal = 255;
-  const pBajo = totalPixeles * 0.04;
-  const pAlto = totalPixeles * 0.94;
-
-  for (let i = 0; i < 256; i++) {
-    acum += histograma[i];
-    if (acum >= pBajo) { minVal = i; break; }
-  }
-  acum = 0;
-  for (let i = 0; i < 256; i++) {
-    acum += histograma[i];
-    if (acum >= pAlto) { maxVal = i; break; }
+  // Imagen integral para promedio local rápido en O(1)
+  const integral = new Uint32Array(n);
+  for (let y = 0; y < h; y++) {
+    let sumaFila = 0;
+    const rowOffset = y * w;
+    for (let x = 0; x < w; x++) {
+      sumaFila += gray[rowOffset + x];
+      integral[rowOffset + x] = (y > 0 ? integral[rowOffset - w + x] : 0) + sumaFila;
+    }
   }
 
-  const rango = Math.max(40, maxVal - minVal);
-  const normalizados = new Uint8ClampedArray(totalPixeles);
+  const radio = Math.max(12, Math.round(Math.min(w, h) / 14));
+  for (let y = 0; y < h; y++) {
+    const y1 = Math.max(0, y - radio);
+    const y2 = Math.min(h - 1, y + radio);
+    const rowOffset = y * w;
+    for (let x = 0; x < w; x++) {
+      const x1 = Math.max(0, x - radio);
+      const x2 = Math.min(w - 1, x + radio);
+      const area = (x2 - x1 + 1) * (y2 - y1 + 1);
 
-  for (let p = 0; p < totalPixeles; p++) {
-    let v = ((grises[p] - minVal) * 255) / rango;
-    // Suave realce de tinta oscura sin destruir trazos finos
-    v = (v - 128) * 1.15 + 128;
-    normalizados[p] = Math.max(0, Math.min(255, Math.round(v)));
-  }
+      const A = (y1 > 0 && x1 > 0) ? integral[(y1 - 1) * w + (x1 - 1)] : 0;
+      const B = (y1 > 0) ? integral[(y1 - 1) * w + x2] : 0;
+      const C = (x1 > 0) ? integral[y2 * w + (x1 - 1)] : 0;
+      const D = integral[y2 * w + x2];
 
-  // 3. Filtro de nitidez ligero (Unsharp / Sharpen 3x3) para definir bordes de letras
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const idx = y * w + x;
-      const centro = normalizados[idx] * 5;
-      const vecinos =
-        normalizados[idx - 1] +
-        normalizados[idx + 1] +
-        normalizados[idx - w] +
-        normalizados[idx + w];
+      const promedioLocal = (D - B - C + A) / area;
+      const g = gray[rowOffset + x];
+      const val = (g < promedioLocal * factorUmbral && g < 210) ? 0 : 255;
 
-      const nitido = Math.max(0, Math.min(255, centro - vecinos));
-      const p4 = idx * 4;
-      d[p4] = nitido;
-      d[p4 + 1] = nitido;
-      d[p4 + 2] = nitido;
+      const p4 = (rowOffset + x) * 4;
+      d[p4] = val;
+      d[p4 + 1] = val;
+      d[p4 + 2] = val;
+      d[p4 + 3] = 255;
     }
   }
 
   ctx.putImageData(imgData, 0, 0);
-  return canvasProc;
+  return canvasOut;
 }
 
-async function ejecutarLecturaINE(canvasOriginal) {
+async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
   const estadoDiv = document.getElementById('estadoEscanerINE');
   estadoDiv.style.display = 'block';
-  estadoDiv.innerHTML = '⏳ Optimizando nitidez de credencial y buscando códigos...';
+  estadoDiv.innerHTML = '⏳ Inicializando motor OCR de alta precisión...';
 
+  if (typeof window.Tesseract === 'undefined') {
+    estadoDiv.innerHTML = '❌ La librería OCR aún está cargando. Intenta de nuevo en unos segundos.';
+    return;
+  }
+
+  let worker = null;
   try {
-    const canvasMejorado = preprocesarCanvasINE(canvasOriginal);
+    worker = await window.Tesseract.createWorker('spa');
 
-    // 1. Intentar detectar QR en el reverso si existe
-    let qrDetectado = false;
-    if (typeof window.jsQR === 'function') {
-      const ctxOrig = canvasOriginal.getContext('2d');
-      const rawData = ctxOrig.getImageData(0, 0, canvasOriginal.width, canvasOriginal.height);
-      const qr = window.jsQR(rawData.data, rawData.width, rawData.height);
-      if (qr && qr.data) qrDetectado = true;
+    let apellidosDetectados = '';
+    let nombresDetectados = '';
+    let seccionDetectada = '';
+    let localidadDetectada = '';
+    let debugTexto = '';
+
+    if (modoLado === 'FRENTE') {
+      // ZONA 1: NOMBRE (Ignora foto a la izquierda, encabezado arriba y datos de derecha)
+      estadoDiv.innerHTML = '🔍 Leyendo Zona 1/3: <strong>Apellidos y Nombre(s)</strong>...';
+      const canvasNombre = binarizarAdaptativoCanvas(
+        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.17, 0.53, 0.28, 950),
+        0.87
+      );
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ '
+      });
+      const resNombre = await worker.recognize(canvasNombre);
+      const txtNombre = resNombre.data.text || '';
+      const parsedNombre = parsearZonaNombreINE(txtNombre);
+      apellidosDetectados = parsedNombre.apellidos;
+      nombresDetectados = parsedNombre.nombres;
+
+      // ZONA 2: DOMICILIO / LOCALIDAD
+      estadoDiv.innerHTML = '🔍 Leyendo Zona 2/3: <strong>Localidad / Colonia</strong>...';
+      const canvasDom = binarizarAdaptativoCanvas(
+        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.41, 0.60, 0.27, 950),
+        0.88
+      );
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789/.,- '
+      });
+      const resDom = await worker.recognize(canvasDom);
+      const txtDom = resDom.data.text || '';
+      localidadDetectada = parsearZonaLocalidadINE(txtDom);
+
+      // ZONA 3: SECCIÓN ELECTORAL (Solo 4 dígitos)
+      estadoDiv.innerHTML = '🔍 Leyendo Zona 3/3: <strong>Sección Electoral</strong>...';
+      const canvasSecc = binarizarAdaptativoCanvas(
+        recortarSubZonaCanvas(canvasTarjeta, 0.68, 0.60, 0.30, 0.34, 700),
+        0.86
+      );
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        tessedit_char_whitelist: '0123456789SECCION '
+      });
+      const resSecc = await worker.recognize(canvasSecc);
+      const txtSecc = resSecc.data.text || '';
+      seccionDetectada = parsearZonaSeccionINE(txtSecc);
+
+      debugTexto = `[ZONA NOMBRE]\n${txtNombre.trim()}\n\n[ZONA DOMICILIO]\n${txtDom.trim()}\n\n[ZONA SECCIÓN]\n${txtSecc.trim()}`;
+      document.getElementById('badgeTipoLecturaINE').innerText = 'Frente (3 Zonas ROI)';
+
+    } else if (modoLado === 'REVERSO') {
+      // ZONA MRZ INFERIOR DEL REVERSO (OCR-B estándar)
+      estadoDiv.innerHTML = '🔍 Leyendo código MRZ del reverso...';
+      const canvasMRZ = binarizarAdaptativoCanvas(
+        recortarSubZonaCanvas(canvasTarjeta, 0.03, 0.63, 0.94, 0.35, 1100),
+        0.86
+      );
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<'
+      });
+      const resMRZ = await worker.recognize(canvasMRZ);
+      const txtMRZ = resMRZ.data.text || '';
+      const parsedMRZ = parsearZonaMRZINE(txtMRZ);
+      apellidosDetectados = parsedMRZ.apellidos;
+      nombresDetectados = parsedMRZ.nombres;
+
+      debugTexto = `[ZONA MRZ REVERSO]\n${txtMRZ.trim()}`;
+      document.getElementById('badgeTipoLecturaINE').innerText = 'Reverso MRZ';
+
+    } else {
+      // MODO HOJA / COPIA COMPLETA SIN ENCUADRE
+      estadoDiv.innerHTML = '🔍 Leyendo documento completo...';
+      const canvasFull = binarizarAdaptativoCanvas(
+        recortarSubZonaCanvas(canvasTarjeta, 0, 0, 1, 1, 1300),
+        0.88
+      );
+      await worker.setParameters({
+        tessedit_pageseg_mode: '3',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789/<.,- '
+      });
+      const resFull = await worker.recognize(canvasFull);
+      const txtFull = resFull.data.text || '';
+
+      const mrzTry = parsearZonaMRZINE(txtFull);
+      const nomTry = parsearZonaNombreINE(txtFull);
+      apellidosDetectados = mrzTry.apellidos || nomTry.apellidos;
+      nombresDetectados = mrzTry.nombres || nomTry.nombres;
+      localidadDetectada = parsearZonaLocalidadINE(txtFull);
+      seccionDetectada = parsearZonaSeccionINE(txtFull);
+
+      debugTexto = `[LECTURA COMPLETA]\n${txtFull.trim()}`;
+      document.getElementById('badgeTipoLecturaINE').innerText = 'Copia Completa';
     }
 
-    // 2. Ejecutar OCR con Tesseract.js
-    if (typeof window.Tesseract === 'undefined') {
-      throw new Error('La librería OCR aún está cargando. Intenta de nuevo en unos segundos.');
-    }
-
-    const resultadoOCR = await window.Tesseract.recognize(canvasMejorado, 'spa', {
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round((m.progress || 0) * 100);
-          estadoDiv.innerHTML = `🔍 Leyendo datos de la credencial INE... <strong>${pct}%</strong>`;
-        }
-      }
-    });
-
-    const textoCrudo = (resultadoOCR && resultadoOCR.data && resultadoOCR.data.text) ? resultadoOCR.data.text : '';
-    const extraido = parsearTextoINE(textoCrudo);
-
+    // Conservar datos previos si se está escaneando el segundo lado de la misma INE
     const apPrev = document.getElementById('ineDetectadoApellidos').value.trim();
     const nomPrev = document.getElementById('ineDetectadoNombres').value.trim();
     const secPrev = document.getElementById('ineDetectadoSeccion').value.trim();
     const locPrev = document.getElementById('ineDetectadoLocalidad').value.trim();
 
-    document.getElementById('ineDetectadoApellidos').value = extraido.apellidos || apPrev;
-    document.getElementById('ineDetectadoNombres').value = extraido.nombres || nomPrev;
-    document.getElementById('ineDetectadoSeccion').value = extraido.seccion || secPrev;
-    document.getElementById('ineDetectadoLocalidad').value = extraido.localidad || locPrev;
+    document.getElementById('ineDetectadoApellidos').value = apellidosDetectados || apPrev;
+    document.getElementById('ineDetectadoNombres').value = nombresDetectados || nomPrev;
+    document.getElementById('ineDetectadoSeccion').value = seccionDetectada || secPrev;
+    document.getElementById('ineDetectadoLocalidad').value = localidadDetectada || locPrev;
 
     const debugPrev = document.getElementById('ineTextoCrudoDebug').innerText;
-    document.getElementById('ineTextoCrudoDebug').innerText = (debugPrev ? debugPrev + '\n--- LADO 2 ---\n' : '') + textoCrudo.trim();
-
-    const badge = document.getElementById('badgeTipoLecturaINE');
-    if (extraido.origen === 'MRZ') {
-      badge.innerText = qrDetectado ? 'Reverso MRZ + QR' : 'Reverso MRZ';
-    } else {
-      badge.innerText = qrDetectado ? 'Frente + QR' : 'Frente OCR';
-    }
+    document.getElementById('ineTextoCrudoDebug').innerText = (debugPrev ? debugPrev + '\n\n' : '') + debugTexto;
 
     estadoDiv.style.display = 'none';
     document.getElementById('resultadoEscanerINE').style.display = 'block';
   } catch (error) {
     console.error('Error al procesar INE:', error);
-    estadoDiv.innerHTML = `❌ No se pudo leer la imagen: ${error.message || 'Intenta re-encuadrar la credencial.'}`;
+    estadoDiv.innerHTML = `❌ Error al leer la credencial: ${error.message || 'Intenta re-encuadrar.'}`;
+  } finally {
+    if (worker) {
+      try { await worker.terminate(); } catch (e) { /* ignorar */ }
+    }
   }
 }
 
-// Limpia tokens basura de 1 letra generados por hologramas y normaliza espacios
-function limpiarLineaNombreINE(linea) {
+// ==========================================
+// PARSERS ESPECIALIZADOS POR ZONA DE LA INE
+// ==========================================
+function limpiarTokensNombreINE(linea) {
   if (!linea) return '';
-  const palabrasReservadas = new Set([
-    'INSTITUTO', 'NACIONAL', 'ELECTORAL', 'CREDENCIAL', 'PARA', 'VOTAR',
-    'MEXICO', 'MÉXICO', 'NOMBRE', 'DOMICILIO', 'CLAVE', 'ELECTOR',
-    'CURP', 'ESTADO', 'MUNICIPIO', 'LOCALIDAD', 'SECCION', 'SECCIÓN',
-    'EMISION', 'EMISIÓN', 'VIGENCIA', 'SEXO', 'FECHA', 'NACIMIENTO', 'ANO', 'AÑO'
+  const palabrasIgnorar = new Set([
+    'NOMBRE', 'NOMBRES', 'INSTITUTO', 'NACIONAL', 'ELECTORAL', 'CREDENCIAL',
+    'PARA', 'VOTAR', 'MEXICO', 'MÉXICO', 'SEXO', 'DOMICILIO', 'CLAVE',
+    'ELECTOR', 'CURP', 'ESTADO', 'MUNICIPIO', 'LOCALIDAD', 'SECCION',
+    'SECCIÓN', 'EMISION', 'EMISIÓN', 'VIGENCIA', 'FECHA', 'NACIMIENTO'
   ]);
 
-  const tokens = linea
+  return linea
+    .toUpperCase()
     .replace(/[^A-ZÁÉÍÓÚÑÜ\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
     .filter(tok => {
       if (!tok) return false;
-      if (palabrasReservadas.has(tok)) return false;
-      // Eliminar letras sueltas de 1 carácter (ruido de holograma), salvo 'Y'
+      if (palabrasIgnorar.has(tok)) return false;
+      // Eliminar caracteres sueltos de 1 letra (ruido de holograma), salvo 'Y'
       if (tok.length === 1 && tok !== 'Y') return false;
+      // Eliminar pares de consonantes idénticas generados por bordes de holograma (ej. II, LL, MM, NN)
+      if (tok.length === 2 && tok[0] === tok[1] && !'AEIOU'.includes(tok[0])) return false;
       return true;
-    });
-
-  return tokens.join(' ').trim();
+    })
+    .join(' ')
+    .trim();
 }
 
-// Analiza el texto OCR tanto del Reverso (MRZ IDMEX) como del Frente de la INE
-function parsearTextoINE(texto) {
-  const resultado = {
-    apellidos: '',
-    nombres: '',
-    seccion: '',
-    localidad: '',
-    origen: 'FRENTE'
-  };
+function parsearZonaNombreINE(texto) {
+  const lineas = texto
+    .split(/\r?\n/)
+    .map(l => limpiarTokensNombreINE(l))
+    .filter(l => l.length >= 2);
 
-  if (!texto) return resultado;
+  if (lineas.length >= 3) {
+    return {
+      apellidos: `${lineas[0]} ${lineas[1]}`.trim(),
+      nombres: lineas.slice(2).join(' ').trim()
+    };
+  }
+  if (lineas.length === 2) {
+    return {
+      apellidos: lineas[0],
+      nombres: lineas[1]
+    };
+  }
+  if (lineas.length === 1) {
+    const palabras = lineas[0].split(' ');
+    if (palabras.length >= 3) {
+      return {
+        apellidos: `${palabras[0]} ${palabras[1]}`,
+        nombres: palabras.slice(2).join(' ')
+      };
+    }
+    return { apellidos: lineas[0], nombres: '' };
+  }
+  return { apellidos: '', nombres: '' };
+}
 
+function parsearZonaSeccionINE(texto) {
+  const limpio = texto.toUpperCase().replace(/\s+/g, ' ');
+  const matchExplicito = limpio.match(/SECCION\s*(\d{4})/);
+  if (matchExplicito) return matchExplicito[1];
+
+  const candidatos = limpio.match(/\b\d{4}\b/g) || [];
+  const oficial = candidatos.find(num => SECCIONES_CUNDUACAN.includes(num));
+  if (oficial) return oficial;
+
+  return candidatos[0] || '';
+}
+
+function distanciaLevenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const costo = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + costo);
+    }
+  }
+  return dp[m][n];
+}
+
+function autocorregirLocalidadCunduacan(textoCrudo) {
+  if (!textoCrudo) return '';
+  let limpio = textoCrudo
+    .toUpperCase()
+    .replace(/\bDOMICILIO\b/g, '')
+    .replace(/\b\d{5}\b/g, '')
+    .replace(/,?\s*CUNDUAC[AÁ]N.*$/i, '')
+    .replace(/,?\s*TAB\.?.*$/i, '')
+    .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (limpio.length < 4) return limpio;
+
+  const normEntrada = normalizarTexto(limpio).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  let mejorMatch = null;
+  let mejorSimilitud = 0;
+
+  for (const locOficial of LOCALIDADES_CUNDUACAN) {
+    const normOficial = normalizarTexto(locOficial).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const dist = distanciaLevenshtein(normEntrada, normOficial);
+    const maxLen = Math.max(normEntrada.length, normOficial.length);
+    const similitud = 1 - dist / maxLen;
+    if (similitud > mejorSimilitud) {
+      mejorSimilitud = similitud;
+      mejorMatch = locOficial;
+    }
+  }
+
+  // Si coincide al menos en un 74% con una localidad oficial de Cunduacán, devolver el nombre limpio oficial
+  if (mejorMatch && mejorSimilitud >= 0.74) {
+    return mejorMatch;
+  }
+  return limpio;
+}
+
+function parsearZonaLocalidadINE(texto) {
   const lineas = texto
     .split(/\r?\n/)
     .map(l => l.trim().toUpperCase())
-    .filter(Boolean);
+    .filter(l => l.length >= 3 && !/^DOMICILIO$/.test(l));
 
-  // A. DETECCIÓN DE REVERSO MRZ (APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2)
-  // Incluye tolerancia cuando el OCR lee '<<<' como 'KKK' o 'CCC' al final de la línea
-  const lineaMRZNombre = lineas.find(l => {
-    const sinEsp = l.replace(/\s+/g, '');
-    if (sinEsp.length < 10) return false;
-    if (/^[A-Z<]{10,}$/.test(sinEsp) && (sinEsp.includes('<<') || /(?:KKK|CCC|<<<)$/.test(sinEsp))) {
-      return true;
-    }
-    return false;
-  });
+  if (lineas.length === 0) return '';
 
-  if (lineaMRZNombre) {
-    let compacta = lineaMRZNombre
-      .replace(/\s+/g, '')
-      // Quitar relleno final de caracteres '<' o 'K'/'C' repetidos al final de la línea MRZ
-      .replace(/[<KC]{3,}$/g, '');
-
-    let partes = compacta.split('<<');
-    if (partes.length < 2) {
-      partes = compacta.split(/(?:KK|CC)/);
-    }
-
-    if (partes.length >= 2) {
-      const apellidosMRZ = limpiarLineaNombreINE(partes[0].replace(/<+/g, ' '));
-      const nombresMRZ = limpiarLineaNombreINE(partes.slice(1).join(' ').replace(/<+/g, ' '));
-      if (apellidosMRZ.length >= 2 && nombresMRZ.length >= 2) {
-        resultado.apellidos = apellidosMRZ;
-        resultado.nombres = nombresMRZ;
-        resultado.origen = 'MRZ';
-      }
-    }
+  // Buscar línea con prefijo de asentamiento (COL, R/A, EJ, POB, FRACC, VILLA)
+  const lineaAsentamiento = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG|LOC)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
+  if (lineaAsentamiento) {
+    return autocorregirLocalidadCunduacan(lineaAsentamiento);
   }
 
-  // B. DETECCIÓN DE SECCIÓN ELECTORAL (4 DÍGITOS)
-  const textoPlano = lineas.join(' ');
-  const matchSeccionExplicita = textoPlano.match(/(?:SECCI[OÓ0]N|SECC)\s*[:.\-]?\s*(\d{4})/);
-  if (matchSeccionExplicita) {
-    resultado.seccion = matchSeccionExplicita[1];
-  } else {
-    const candidatos4Digitos = textoPlano.match(/\b\d{4}\b/g) || [];
-    const coincidenciaCunduacan = candidatos4Digitos.find(num => SECCIONES_CUNDUACAN.includes(num));
-    if (coincidenciaCunduacan) {
-      resultado.seccion = coincidenciaCunduacan;
-    }
+  // Si no tiene prefijo claro, tomar la línea intermedia (típicamente línea 2 del domicilio, antes de Municipio/Estado)
+  const idxMpio = lineas.findIndex(l => /CUNDUAC/.test(l));
+  if (idxMpio > 0) {
+    return autocorregirLocalidadCunduacan(lineas[idxMpio - 1]);
   }
 
-  // C. DETECCIÓN DE NOMBRE EN EL FRENTE (SI NO SE LEYÓ MRZ)
-  if (!resultado.apellidos || !resultado.nombres) {
-    const idxNombre = lineas.findIndex(l => /\bNOMBRE\b/.test(l));
-    if (idxNombre !== -1) {
-      const bloqueNombre = [];
-      for (let i = idxNombre + 1; i < Math.min(idxNombre + 6, lineas.length); i++) {
-        const ln = lineas[i];
-        if (/(DOMICILIO|CLAVE|CURP|FECHA|SEXO|ESTADO|MUNICIPIO|LOCALIDAD|EMISI|VIGENCIA)/.test(ln)) break;
-        const limpia = limpiarLineaNombreINE(ln);
-        if (limpia.length >= 2) {
-          bloqueNombre.push(limpia);
-        }
-      }
-
-      if (bloqueNombre.length >= 3) {
-        resultado.apellidos = `${bloqueNombre[0]} ${bloqueNombre[1]}`.trim();
-        resultado.nombres = bloqueNombre.slice(2).join(' ').trim();
-      } else if (bloqueNombre.length === 2) {
-        resultado.apellidos = bloqueNombre[0];
-        resultado.nombres = bloqueNombre[1];
-      }
-    }
+  if (lineas.length >= 2) {
+    return autocorregirLocalidadCunduacan(lineas[1]);
   }
+  return autocorregirLocalidadCunduacan(lineas[0]);
+}
 
-  // D. DETECCIÓN DE LOCALIDAD / COLONIA EN DOMICILIO
-  const lineaColonia = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG|LOC|LOCALIDAD)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
-  if (lineaColonia) {
-    resultado.localidad = lineaColonia
-      .replace(/\b\d{5}\b/g, '')
-      .replace(/,?\s*CUNDUAC[AÁ]N.*$/i, '')
-      .replace(/,?\s*TAB\.?.*$/i, '')
-      .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  } else {
-    const idxMpio = lineas.findIndex(l => /CUNDUAC[AÁ]N/.test(l));
-    if (idxMpio > 0) {
-      resultado.localidad = lineas[idxMpio - 1]
-        .replace(/\b\d{5}\b/g, '')
-        .replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/\s.-]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-  }
+function parsearZonaMRZINE(texto) {
+  const lineas = texto
+    .split(/\r?\n/)
+    .map(l => l.replace(/\s+/g, '').toUpperCase())
+    .filter(l => l.length >= 10);
 
-  return resultado;
+  // Buscar la línea de nombres MRZ (contiene '<<' y NO empieza con IDMEX ni dígitos)
+  const lineaNombre = lineas.find(l => l.includes('<<') && !l.startsWith('IDMEX') && !/^\d{6}/.test(l));
+  if (!lineaNombre) return { apellidos: '', nombres: '' };
+
+  // En la línea de nombres MRZ no existen dígitos: corregir confusiones típicas de OCR
+  const corregida = lineaNombre
+    .replace(/0/g, 'O')
+    .replace(/1/g, 'I')
+    .replace(/5/g, 'S')
+    .replace(/8/g, 'B')
+    .replace(/<+$/g, '');
+
+  const partes = corregida.split('<<');
+  if (partes.length < 2) return { apellidos: '', nombres: '' };
+
+  const apellidos = limpiarTokensNombreINE(partes[0].replace(/<+/g, ' '));
+  const nombres = limpiarTokensNombreINE(partes.slice(1).join(' ').replace(/<+/g, ' '));
+  return { apellidos, nombres };
 }
 
 function aplicarDatosINEAlFormulario() {

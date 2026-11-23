@@ -609,7 +609,7 @@
 
   </div>
 
-  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + RECORTE DE ENCUADRE + OCR MEJORADO) -->
+  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + ENCUADRE + LECTURA POR ZONAS ROI) -->
   <div id="modalEscanerINE" class="modal">
     <div class="modal-content" style="max-width: 560px; max-height: 92vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -658,10 +658,10 @@
         </div>
       </div>
 
-      <!-- PASO 2: ENCUADRE Y RECORTE DE LA CREDENCIAL (ELIMINA LETRAS DE MÁS DEL FONDO) -->
+      <!-- PASO 2: ENCUADRE Y RECORTE DE LA CREDENCIAL -->
       <div id="pasoRecorteINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="font-size: 0.83rem; font-weight: 700; color: #1e40af; margin-bottom: 6px;">
-          ✂️ Encuadra SOLO la credencial (arrastra y acerca para quitar el fondo):
+          ✂️ Ajusta los 4 bordes de la credencial dentro del marco azul:
         </div>
         <div style="position: relative; width: 100%; background: #0f172a; border-radius: 6px; overflow: hidden; touch-action: none;">
           <canvas id="canvasRecorteINE" style="width: 100%; display: block; cursor: grab;"></canvas>
@@ -669,7 +669,7 @@
 
         <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
           <label for="sliderZoomRecorteINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
-            🔍 Acercar: <span id="valorZoomRecorteINE">1.0x</span>
+            🔍 Zoom: <span id="valorZoomRecorteINE">1.0x</span>
           </label>
           <input type="range" id="sliderZoomRecorteINE" min="0.6" max="3.5" step="0.05" value="1" oninput="actualizarZoomRecorteINE(this.value)" style="flex: 1; cursor: pointer;">
           <button type="button" onclick="rotarImagenRecorteINE()" class="btn-secondary" style="font-size: 0.8rem; padding: 5px 9px; white-space: nowrap;">
@@ -677,12 +677,21 @@
           </button>
         </div>
 
+        <!-- SELECTOR DE LADO DE LA CREDENCIAL PARA APLICAR ZONAS EXACTAS -->
+        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+          <label for="selectLadoINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
+            Lado capturado:
+          </label>
+          <select id="selectLadoINE" style="flex: 1; padding: 4px 6px; font-size: 0.82rem; border: 1px solid #94a3b8; border-radius: 4px;">
+            <option value="FRENTE">🪪 Frente (Nombre, Sección, Localidad)</option>
+            <option value="REVERSO">🔄 Reverso (Lectura MRZ de Nombre y Apellidos)</option>
+            <option value="COMPLETA">📄 Hoja / Copia completa sin encuadre</option>
+          </select>
+        </div>
+
         <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button type="button" onclick="confirmarRecorteYLeerINE()" class="btn-primary" style="flex: 2; background: #16a34a; font-size: 0.92rem;">
-            🔍 Leer Área Encuadrada
-          </button>
-          <button type="button" onclick="leerImagenCompletaSinRecorteINE()" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
-            Leer Completa
+          <button type="button" onclick="confirmarRecorteYLeerINE()" class="btn-primary" style="flex: 1; background: #16a34a; font-size: 0.94rem;">
+            🔍 Leer Datos de Credencial
           </button>
         </div>
       </div>
@@ -709,7 +718,7 @@
       <div id="resultadoEscanerINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <strong style="color: #166534; font-size: 0.95rem;">✅ Datos Detectados (Verifica o edita):</strong>
-          <span id="badgeTipoLecturaINE" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">OCR</span>
+          <span id="badgeTipoLecturaINE" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">OCR ROI</span>
         </div>
 
         <div class="form-group" style="margin-bottom: 8px;">
@@ -732,8 +741,8 @@
         </div>
 
         <details style="margin-bottom: 10px; font-size: 0.78rem; color: #64748b;">
-          <summary style="cursor: pointer;">Ver texto crudo leído de la credencial</summary>
-          <pre id="ineTextoCrudoDebug" style="white-space: pre-wrap; background: #e2e8f0; padding: 6px; border-radius: 4px; max-height: 90px; overflow-y: auto; margin-top: 4px;"></pre>
+          <summary style="cursor: pointer;">Ver texto crudo leído por zona</summary>
+          <pre id="ineTextoCrudoDebug" style="white-space: pre-wrap; background: #e2e8f0; padding: 6px; border-radius: 4px; max-height: 110px; overflow-y: auto; margin-top: 4px;"></pre>
         </details>
 
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -830,6 +839,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
