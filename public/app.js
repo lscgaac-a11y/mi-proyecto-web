@@ -1967,7 +1967,7 @@ async function exportarEstructuraPDF() {
 }
 
 // ==========================================
-// 14. ESCÁNER DE CREDENCIAL INE (SOLO NOMBRE, DOMICILIO Y SECCIÓN)
+// 14. ESCÁNER DE CREDENCIAL INE (ANCLAJE ESPACIAL POR COORDENADAS BBOX)
 // ==========================================
 function enfocarCapturaManual(inputId) {
   const campo = document.getElementById(inputId);
@@ -2367,31 +2367,17 @@ function dibujarVistaPreviaRecorteINE() {
   ctx.lineWidth = 2.5;
   ctx.strokeRect(marcoX, marcoY, marcoW, marcoH);
 
-  // Guías visuales de las 3 ÚNICAS zonas que leerá el OCR (deja fuera Año de Registro, CURP y Clave)
+  // Guía de foto a la izquierda para ayudar a centrar la tarjeta
   const lado = document.getElementById('selectLadoINE')?.value || 'FRENTE';
   if (lado === 'FRENTE') {
-    const zonasGuia = [
-      { rx: 0.27, ry: 0.19, rw: 0.41, rh: 0.21, color: '#22c55e', texto: '1. NOMBRE' },
-      { rx: 0.27, ry: 0.42, rw: 0.61, rh: 0.20, color: '#eab308', texto: '2. DOMICILIO' },
-      { rx: 0.56, ry: 0.80, rw: 0.39, rh: 0.15, color: '#38bdf8', texto: '3. SECCIÓN' }
-    ];
-
     ctx.save();
     ctx.setLineDash([4, 3]);
-    ctx.lineWidth = 1.5;
-    ctx.font = 'bold 10px sans-serif';
-
-    zonasGuia.forEach(z => {
-      const zx = marcoX + marcoW * z.rx;
-      const zy = marcoY + marcoH * z.ry;
-      const zw = marcoW * z.rw;
-      const zh = marcoH * z.rh;
-
-      ctx.strokeStyle = z.color;
-      ctx.strokeRect(zx, zy, zw, zh);
-      ctx.fillStyle = z.color;
-      ctx.fillText(z.texto, zx + 4, zy + 11);
-    });
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(marcoX + marcoW * 0.03, marcoY + marcoH * 0.22, marcoW * 0.21, marcoH * 0.56);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText('FOTO', marcoX + marcoW * 0.09, marcoY + marcoH * 0.51);
     ctx.restore();
   }
 }
@@ -2497,93 +2483,314 @@ async function escanearOtroLadoINE() {
 }
 
 // ==========================================
-// EXTRACCIÓN DE ZONA (ROI) + BINARIZACIÓN ADAPTATIVA LOCAL (BRADLEY-ROTH)
+// REALCE DE CONTRASTE EN ESCALA DE GRISES (PRESERVA ETIQUETAS Y ANTI-ALIASING LSTM)
 // ==========================================
-function recortarSubZonaCanvas(canvasTarjeta, rx, ry, rw, rh, anchoMinimo = 950) {
-  const sx = Math.max(0, Math.round(canvasTarjeta.width * rx));
-  const sy = Math.max(0, Math.round(canvasTarjeta.height * ry));
-  const sw = Math.min(canvasTarjeta.width - sx, Math.round(canvasTarjeta.width * rw));
-  const sh = Math.min(canvasTarjeta.height - sy, Math.round(canvasTarjeta.height * rh));
+function prepararImagenGrisesAltoContraste(canvasOrigen, anchoObjetivo = 1450) {
+  const escala = canvasOrigen.width < anchoObjetivo
+    ? Math.min(2.2, anchoObjetivo / Math.max(1, canvasOrigen.width))
+    : (canvasOrigen.width > 1800 ? 1800 / canvasOrigen.width : 1);
 
-  const escala = sw < anchoMinimo ? Math.min(2.5, anchoMinimo / Math.max(1, sw)) : 1;
-  const outW = Math.round(sw * escala);
-  const outH = Math.round(sh * escala);
+  const w = Math.round(canvasOrigen.width * escala);
+  const h = Math.round(canvasOrigen.height * escala);
 
-  const c = document.createElement('canvas');
-  c.width = outW;
-  c.height = outH;
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(canvasTarjeta, sx, sy, sw, sh, 0, 0, outW, outH);
-  return c;
-}
-
-function binarizarAdaptativoCanvas(canvasOrigen, factorUmbral = 0.88) {
-  const w = canvasOrigen.width;
-  const h = canvasOrigen.height;
   const canvasOut = document.createElement('canvas');
   canvasOut.width = w;
   canvasOut.height = h;
   const ctx = canvasOut.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(canvasOrigen, 0, 0, w, h);
 
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
   const n = w * h;
-  const gray = new Uint8Array(n);
+  const lum = new Uint8Array(n);
+  const hist = new Uint32Array(256);
 
-  // Ponderar el canal rojo (0.55) aclara el fondo rosa/magenta de la INE y resalta la tinta negra
+  // Ponderación roja (0.58) elimina el fondo rosa/guilloché de la INE sin borrar etiquetas grises
   for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    gray[p] = Math.round(0.55 * d[i] + 0.35 * d[i + 1] + 0.10 * d[i + 2]);
+    const g = Math.min(255, Math.round(0.58 * d[i] + 0.32 * d[i + 1] + 0.10 * d[i + 2]));
+    lum[p] = g;
+    hist[g]++;
   }
 
-  // Imagen integral para promedio local rápido en O(1)
-  const integral = new Uint32Array(n);
-  for (let y = 0; y < h; y++) {
-    let sumaFila = 0;
-    const rowOffset = y * w;
-    for (let x = 0; x < w; x++) {
-      sumaFila += gray[rowOffset + x];
-      integral[rowOffset + x] = (y > 0 ? integral[rowOffset - w + x] : 0) + sumaFila;
-    }
+  // Calcular percentil 2% (negro tinta) y percentil 88% (fondo tarjeta)
+  let acum = 0;
+  let minL = 0;
+  let maxL = 235;
+  const pBajo = n * 0.02;
+  const pAlto = n * 0.88;
+
+  for (let i = 0; i < 256; i++) {
+    acum += hist[i];
+    if (acum >= pBajo) { minL = i; break; }
+  }
+  acum = 0;
+  for (let i = 0; i < 256; i++) {
+    acum += hist[i];
+    if (acum >= pAlto) { maxL = i; break; }
+  }
+  if (maxL <= minL + 25) {
+    minL = 20;
+    maxL = 220;
   }
 
-  const radio = Math.max(12, Math.round(Math.min(w, h) / 14));
-  for (let y = 0; y < h; y++) {
-    const y1 = Math.max(0, y - radio);
-    const y2 = Math.min(h - 1, y + radio);
-    const rowOffset = y * w;
-    for (let x = 0; x < w; x++) {
-      const x1 = Math.max(0, x - radio);
-      const x2 = Math.min(w - 1, x + radio);
-      const area = (x2 - x1 + 1) * (y2 - y1 + 1);
-
-      const A = (y1 > 0 && x1 > 0) ? integral[(y1 - 1) * w + (x1 - 1)] : 0;
-      const B = (y1 > 0) ? integral[(y1 - 1) * w + x2] : 0;
-      const C = (x1 > 0) ? integral[y2 * w + (x1 - 1)] : 0;
-      const D = integral[y2 * w + x2];
-
-      const promedioLocal = (D - B - C + A) / area;
-      const g = gray[rowOffset + x];
-      const val = (g < promedioLocal * factorUmbral && g < 210) ? 0 : 255;
-
-      const p4 = (rowOffset + x) * 4;
-      d[p4] = val;
-      d[p4 + 1] = val;
-      d[p4 + 2] = val;
-      d[p4 + 3] = 255;
-    }
+  const rango = maxL - minL;
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    let norm = (lum[p] - minL) / rango;
+    if (norm < 0) norm = 0;
+    if (norm > 1) norm = 1;
+    // Gamma suave (1.18) oscurece las etiquetas pequeñas NOMBRE/DOMICILIO/SECCION
+    const val = Math.round(Math.pow(norm, 1.18) * 255);
+    d[i] = val;
+    d[i + 1] = val;
+    d[i + 2] = val;
+    d[i + 3] = 255;
   }
 
   ctx.putImageData(imgData, 0, 0);
   return canvasOut;
 }
 
+// ==========================================
+// EXTRACCIÓN DE PALABRAS CON COORDENADAS BBOX DESDE TESSERACT V5
+// ==========================================
+function extraerPalabrasConCoordenadas(data) {
+  const palabras = [];
+
+  if (Array.isArray(data.words) && data.words.length > 0) {
+    data.words.forEach(w => {
+      if (w && w.text && w.bbox) {
+        palabras.push({ text: w.text, confidence: w.confidence || 0, bbox: w.bbox });
+      }
+    });
+  } else if (Array.isArray(data.blocks)) {
+    data.blocks.forEach(b => {
+      (b.paragraphs || []).forEach(p => {
+        (p.lines || []).forEach(l => {
+          (l.words || []).forEach(w => {
+            if (w && w.text && w.bbox) {
+              palabras.push({ text: w.text, confidence: w.confidence || 0, bbox: w.bbox });
+            }
+          });
+        });
+      });
+    });
+  } else if (typeof data.tsv === 'string') {
+    const lineasTsv = data.tsv.split(/\r?\n/);
+    for (let i = 1; i < lineasTsv.length; i++) {
+      const cols = lineasTsv[i].split('\t');
+      if (cols.length >= 12 && cols[0] === '5' && cols[11].trim()) {
+        const left = parseInt(cols[6], 10) || 0;
+        const top = parseInt(cols[7], 10) || 0;
+        const width = parseInt(cols[8], 10) || 0;
+        const height = parseInt(cols[9], 10) || 0;
+        palabras.push({
+          text: cols[11].trim(),
+          confidence: parseFloat(cols[10]) || 0,
+          bbox: { x0: left, y0: top, x1: left + width, y1: top + height }
+        });
+      }
+    }
+  }
+
+  return palabras;
+}
+
+function similitudTexto(a, b) {
+  const s1 = normalizarTexto(a).replace(/[^a-z0-9]/g, '');
+  const s2 = normalizarTexto(b).replace(/[^a-z0-9]/g, '');
+  if (!s1 || !s2) return 0;
+  if (s1 === s2) return 1;
+  const dist = distanciaLevenshtein(s1, s2);
+  return 1 - dist / Math.max(s1.length, s2.length);
+}
+
+function agruparPalabrasEnLineasVisuales(palabrasNorm, toleranciaY = 0.017) {
+  if (!palabrasNorm || palabrasNorm.length === 0) return [];
+
+  const ordenadas = [...palabrasNorm].sort((a, b) => a.ncy - b.ncy);
+  const filas = [];
+
+  ordenadas.forEach(p => {
+    let filaDestino = filas.find(f => Math.abs(f.yPromedio - p.ncy) <= toleranciaY);
+    if (!filaDestino) {
+      filaDestino = { yPromedio: p.ncy, items: [] };
+      filas.push(filaDestino);
+    }
+    filaDestino.items.push(p);
+    filaDestino.yPromedio = filaDestino.items.reduce((acc, it) => acc + it.ncy, 0) / filaDestino.items.length;
+  });
+
+  filas.sort((a, b) => a.yPromedio - b.yPromedio);
+
+  return filas.map(f => {
+    f.items.sort((a, b) => a.nx0 - b.nx0);
+    return f.items.map(it => it.limpio).join(' ').replace(/\s+/g, ' ').trim();
+  }).filter(Boolean);
+}
+
+function extraerCamposPorAnclajeEspacial(palabrasRaw, anchoImg, altoImg) {
+  const norm = palabrasRaw
+    .map(w => {
+      const limpio = w.text.toUpperCase().replace(/[^A-ZÁÉÍÓÚÑÜ0-9\/.,-]/g, '').trim();
+      const nx0 = w.bbox.x0 / anchoImg;
+      const ny0 = w.bbox.y0 / altoImg;
+      const nx1 = w.bbox.x1 / anchoImg;
+      const ny1 = w.bbox.y1 / altoImg;
+      return {
+        raw: w.text,
+        limpio,
+        conf: w.confidence,
+        nx0, ny0, nx1, ny1,
+        ncx: (nx0 + nx1) / 2,
+        ncy: (ny0 + ny1) / 2
+      };
+    })
+    .filter(w => w.limpio.length >= 1 && w.ncx >= 0.23 && w.ncy >= 0.14);
+
+  // 1. LOCALIZAR ANCLAS GEOMÉTRICAS (ETIQUETAS IMPRESAS EN LA INE)
+  const anclaNombre = norm.find(w =>
+    w.ncx >= 0.24 && w.ncx <= 0.62 && w.ncy >= 0.15 && w.ncy <= 0.34 &&
+    similitudTexto(w.limpio, 'NOMBRE') >= 0.72
+  );
+
+  const anclaDomicilio = norm.find(w =>
+    w.ncx >= 0.24 && w.ncx <= 0.62 && w.ncy >= 0.30 && w.ncy <= 0.56 &&
+    similitudTexto(w.limpio, 'DOMICILIO') >= 0.72
+  );
+
+  const anclaClaveCurp = norm.find(w =>
+    w.ncx >= 0.24 && w.ncx <= 0.85 && w.ncy >= 0.50 && w.ncy <= 0.82 &&
+    (similitudTexto(w.limpio, 'CLAVE') >= 0.75 ||
+     similitudTexto(w.limpio, 'ELECTOR') >= 0.72 ||
+     similitudTexto(w.limpio, 'CURP') >= 0.75)
+  );
+
+  // Límite derecho de NOMBRE: donde empiezan SEXO, AÑO DE REGISTRO o VIGENCIA
+  const anclasColumnaDerecha = norm.filter(w =>
+    w.ncx >= 0.62 && w.ncy >= 0.15 && w.ncy <= 0.44 &&
+    (similitudTexto(w.limpio, 'SEXO') >= 0.75 ||
+     similitudTexto(w.limpio, 'REGISTRO') >= 0.72 ||
+     similitudTexto(w.limpio, 'VIGENCIA') >= 0.72 ||
+     similitudTexto(w.limpio, 'ANO') >= 0.75)
+  );
+  const xMinColumnaDerecha = anclasColumnaDerecha.length > 0
+    ? Math.min(...anclasColumnaDerecha.map(a => a.nx0))
+    : 0.68;
+
+  const anclaSeccion = norm.find(w =>
+    w.ncx >= 0.45 && w.ncx <= 0.96 && w.ncy >= 0.65 && w.ncy <= 0.96 &&
+    similitudTexto(w.limpio, 'SECCION') >= 0.70
+  );
+
+  // 2. EXTRAER ÚNICAMENTE PALABRAS DE "NOMBRE"
+  const yMinNombre = anclaNombre ? (anclaNombre.ny1 - 0.004) : 0.19;
+  const yMaxNombre = anclaDomicilio ? (anclaDomicilio.ny0 - 0.004) : 0.41;
+  const xMaxNombre = Math.min(0.69, Math.max(0.56, xMinColumnaDerecha - 0.012));
+
+  const palabrasNombre = norm.filter(w => {
+    if (w.ncy < yMinNombre || w.ncy > yMaxNombre) return false;
+    if (w.ncx < 0.25 || w.ncx > xMaxNombre) return false;
+    if (/\d/.test(w.limpio)) return false;
+    if (esLineaRuidoINE(w.limpio)) return false;
+    if (similitudTexto(w.limpio, 'NOMBRE') >= 0.72) return false;
+    if (similitudTexto(w.limpio, 'DOMICILIO') >= 0.72) return false;
+    const soloLetras = w.limpio.replace(/[^A-ZÁÉÍÓÚÑÜ]/g, '');
+    if (soloLetras.length < 2 && soloLetras !== 'Y') return false;
+    w.limpio = soloLetras;
+    return true;
+  });
+
+  const lineasNombre = agruparPalabrasEnLineasVisuales(palabrasNombre, 0.017)
+    .map(l => limpiarTokensNombreINE(l))
+    .filter(l => l.length >= 2);
+
+  let apellidos = '';
+  let nombres = '';
+  if (lineasNombre.length >= 3) {
+    apellidos = `${lineasNombre[0]} ${lineasNombre[1]}`.trim();
+    nombres = lineasNombre.slice(2).join(' ').trim();
+  } else if (lineasNombre.length === 2) {
+    apellidos = lineasNombre[0];
+    nombres = lineasNombre[1];
+  } else if (lineasNombre.length === 1) {
+    const toks = lineasNombre[0].split(' ');
+    if (toks.length >= 3) {
+      apellidos = `${toks[0]} ${toks[1]}`;
+      nombres = toks.slice(2).join(' ');
+    } else {
+      apellidos = lineasNombre[0];
+    }
+  }
+
+  // 3. EXTRAER ÚNICAMENTE PALABRAS DE "DOMICILIO" (LOCALIDAD / COLONIA)
+  const yMinDom = anclaDomicilio ? (anclaDomicilio.ny1 - 0.004) : (yMaxNombre + 0.018);
+  const yMaxDom = anclaClaveCurp ? (anclaClaveCurp.ny0 - 0.004) : 0.62;
+
+  const palabrasDom = norm.filter(w => {
+    if (w.ncy < yMinDom || w.ncy > yMaxDom) return false;
+    if (w.ncx < 0.25 || w.ncx > 0.96) return false;
+    if (esLineaRuidoINE(w.limpio)) return false;
+    if (similitudTexto(w.limpio, 'DOMICILIO') >= 0.72) return false;
+    return true;
+  });
+
+  const lineasDom = agruparPalabrasEnLineasVisuales(palabrasDom, 0.017);
+  const localidad = parsearZonaLocalidadINE(lineasDom.join('\n'));
+
+  // 4. EXTRAER ÚNICAMENTE "SECCIÓN" (4 DÍGITOS JUNTO A ETIQUETA SECCIÓN, EXCLUYENDO AÑOS)
+  let seccion = '';
+  const candidatos4Digitos = norm.filter(w => {
+    const digitos = w.limpio.replace(/\D/g, '');
+    if (digitos.length !== 4) return false;
+    if (/^(19|20)\d{2}$/.test(digitos)) return false; // Excluir Año de Registro, Emisión y Vigencia
+    w.digitos = digitos;
+    return true;
+  });
+
+  if (anclaSeccion) {
+    // En INE Tipo G/H el número está a la derecha; en Tipo E/F está justo debajo
+    const cercanos = candidatos4Digitos
+      .filter(c =>
+        c.ncx >= anclaSeccion.nx0 - 0.06 &&
+        c.ncx <= anclaSeccion.nx1 + 0.26 &&
+        c.ncy >= anclaSeccion.ny0 - 0.03 &&
+        c.ncy <= anclaSeccion.ny1 + 0.11
+      )
+      .sort((a, b) => {
+        const dA = Math.hypot(a.ncx - anclaSeccion.nx1, a.ncy - anclaSeccion.ncy);
+        const dB = Math.hypot(b.ncx - anclaSeccion.nx1, b.ncy - anclaSeccion.ncy);
+        return dA - dB;
+      });
+
+    if (cercanos.length > 0) {
+      seccion = cercanos[0].digitos;
+    }
+  }
+
+  if (!seccion) {
+    const zonaInferior = candidatos4Digitos.filter(c => c.ncy >= 0.72 && c.ncx >= 0.50);
+    const oficial = zonaInferior.find(c => SECCIONES_CUNDUACAN.includes(c.digitos));
+    seccion = oficial ? oficial.digitos : (zonaInferior[0]?.digitos || '');
+  }
+
+  const resumenDebug =
+    `[ANCLAS DETECTADAS]\n` +
+    `• NOMBRE: ${anclaNombre ? `y=${(anclaNombre.ncy * 100).toFixed(0)}%` : 'default (19%)'} | Límite Der: x=${(xMaxNombre * 100).toFixed(0)}%\n` +
+    `• DOMICILIO: ${anclaDomicilio ? `y=${(anclaDomicilio.ncy * 100).toFixed(0)}%` : 'default (42%)'} -> hasta ${anclaClaveCurp ? `CLAVE y=${(anclaClaveCurp.ncy * 100).toFixed(0)}%` : 'default (62%)'}\n` +
+    `• SECCIÓN: ${anclaSeccion ? `x=${(anclaSeccion.ncx * 100).toFixed(0)}%, y=${(anclaSeccion.ncy * 100).toFixed(0)}%` : 'zona inferior derecha'}\n\n` +
+    `[1. LÍNEAS NOMBRE]\n${lineasNombre.join('\n') || '(sin lectura)'}\n\n` +
+    `[2. LÍNEAS DOMICILIO]\n${lineasDom.join('\n') || '(sin lectura)'}\n\n` +
+    `[3. SECCIÓN]\n${seccion || '(sin lectura)'}`;
+
+  return { apellidos, nombres, localidad, seccion, resumenDebug };
+}
+
 async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
   const estadoDiv = document.getElementById('estadoEscanerINE');
   estadoDiv.style.display = 'block';
-  estadoDiv.innerHTML = '⏳ Inicializando motor OCR de alta precisión...';
+  estadoDiv.innerHTML = '⏳ Analizando estructura y coordenadas de la credencial INE...';
 
   if (typeof window.Tesseract === 'undefined') {
     estadoDiv.innerHTML = '❌ La librería OCR aún está cargando. Intenta de nuevo en unos segundos.';
@@ -2601,64 +2808,54 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
     let debugTexto = '';
 
     if (modoLado === 'FRENTE') {
-      // ZONA 1: SOLO NOMBRE (x: 27% a 68%, y: 19% a 40%) -> Corta antes de SEXO y AÑO DE REGISTRO
-      estadoDiv.innerHTML = '🔍 Leyendo Zona 1/3: <strong>Apellidos y Nombre(s)</strong>...';
-      const canvasNombre = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.19, 0.41, 0.21, 950),
-        0.87
-      );
-      await worker.setParameters({
-        tessedit_pageseg_mode: '6',
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ '
-      });
-      const resNombre = await worker.recognize(canvasNombre);
-      const txtNombre = resNombre.data.text || '';
-      const parsedNombre = parsearZonaNombreINE(txtNombre);
-      apellidosDetectados = parsedNombre.apellidos;
-      nombresDetectados = parsedNombre.nombres;
+      estadoDiv.innerHTML = '🔍 Detectando etiquetas NOMBRE, DOMICILIO y SECCIÓN...';
+      const canvasPrep = prepararImagenGrisesAltoContraste(canvasTarjeta, 1450);
 
-      // ZONA 2: SOLO DOMICILIO (x: 27% a 88%, y: 42% a 62%) -> Se detiene antes de CLAVE DE ELECTOR y CURP
-      estadoDiv.innerHTML = '🔍 Leyendo Zona 2/3: <strong>Localidad / Colonia</strong>...';
-      const canvasDom = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.42, 0.61, 0.20, 950),
-        0.88
-      );
       await worker.setParameters({
-        tessedit_pageseg_mode: '6',
+        tessedit_pageseg_mode: '3',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789/.,- '
       });
-      const resDom = await worker.recognize(canvasDom);
-      const txtDom = resDom.data.text || '';
-      localidadDetectada = parsearZonaLocalidadINE(txtDom);
 
-      // ZONA 3: SOLO SECCIÓN (x: 56% a 95%, y: 80% a 95%) -> Debajo de AÑO DE REGISTRO y CURP
-      estadoDiv.innerHTML = '🔍 Leyendo Zona 3/3: <strong>Sección Electoral</strong>...';
-      const canvasSecc = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.56, 0.80, 0.39, 0.15, 700),
-        0.86
-      );
-      await worker.setParameters({
-        tessedit_pageseg_mode: '6',
-        tessedit_char_whitelist: '0123456789SECCION '
-      });
-      const resSecc = await worker.recognize(canvasSecc);
-      const txtSecc = resSecc.data.text || '';
-      seccionDetectada = parsearZonaSeccionINE(txtSecc);
+      const res = await worker.recognize(canvasPrep, {}, { blocks: true });
+      const palabras = extraerPalabrasConCoordenadas(res.data);
 
-      debugTexto = `[1. NOMBRE]\n${txtNombre.trim()}\n\n[2. DOMICILIO]\n${txtDom.trim()}\n\n[3. SECCIÓN]\n${txtSecc.trim()}`;
-      document.getElementById('badgeTipoLecturaINE').innerText = 'Frente (3 Zonas Exactas)';
+      if (palabras.length > 0) {
+        const extraido = extraerCamposPorAnclajeEspacial(palabras, canvasPrep.width, canvasPrep.height);
+        apellidosDetectados = extraido.apellidos;
+        nombresDetectados = extraido.nombres;
+        localidadDetectada = extraido.localidad;
+        seccionDetectada = extraido.seccion;
+        debugTexto = extraido.resumenDebug;
+      } else {
+        const txt = res.data.text || '';
+        const nomFallback = extraerBloqueAcotadoNombreINE(txt);
+        apellidosDetectados = nomFallback.apellidos;
+        nombresDetectados = nomFallback.nombres;
+        localidadDetectada = extraerBloqueAcotadoDomicilioINE(txt);
+        seccionDetectada = parsearZonaSeccionINE(txt);
+        debugTexto = `[LECTURA FALLBACK]\n${txt.trim()}`;
+      }
+
+      document.getElementById('badgeTipoLecturaINE').innerText = 'Frente (Anclaje Espacial)';
 
     } else if (modoLado === 'REVERSO') {
       estadoDiv.innerHTML = '🔍 Leyendo código MRZ del reverso...';
-      const canvasMRZ = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.03, 0.63, 0.94, 0.35, 1100),
-        0.86
-      );
+      const sx = Math.round(canvasTarjeta.width * 0.03);
+      const sy = Math.round(canvasTarjeta.height * 0.62);
+      const sw = Math.round(canvasTarjeta.width * 0.94);
+      const sh = Math.round(canvasTarjeta.height * 0.36);
+
+      const cMRZ = document.createElement('canvas');
+      cMRZ.width = sw;
+      cMRZ.height = sh;
+      cMRZ.getContext('2d').drawImage(canvasTarjeta, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      const canvasMRZPrep = prepararImagenGrisesAltoContraste(cMRZ, 1200);
       await worker.setParameters({
         tessedit_pageseg_mode: '6',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<'
       });
-      const resMRZ = await worker.recognize(canvasMRZ);
+      const resMRZ = await worker.recognize(canvasMRZPrep);
       const txtMRZ = resMRZ.data.text || '';
       const parsedMRZ = parsearZonaMRZINE(txtMRZ);
       apellidosDetectados = parsedMRZ.apellidos;
@@ -2668,12 +2865,8 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
       document.getElementById('badgeTipoLecturaINE').innerText = 'Reverso MRZ';
 
     } else {
-      // MODO COPIA COMPLETA: Aísla estrictamente por etiquetas NOMBRE / DOMICILIO / SECCIÓN
       estadoDiv.innerHTML = '🔍 Extrayendo únicamente Nombre, Domicilio y Sección...';
-      const canvasFull = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0, 0, 1, 1, 1300),
-        0.88
-      );
+      const canvasFull = prepararImagenGrisesAltoContraste(canvasTarjeta, 1500);
       await worker.setParameters({
         tessedit_pageseg_mode: '3',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ0123456789/<.,- '
