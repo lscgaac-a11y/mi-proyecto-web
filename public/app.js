@@ -1967,7 +1967,7 @@ async function exportarEstructuraPDF() {
 }
 
 // ==========================================
-// 14. ESCÁNER DE CREDENCIAL INE POR ZONAS ROI + BINARIZACIÓN ADAPTATIVA
+// 14. ESCÁNER DE CREDENCIAL INE (SOLO NOMBRE, DOMICILIO Y SECCIÓN)
 // ==========================================
 function enfocarCapturaManual(inputId) {
   const campo = document.getElementById(inputId);
@@ -2355,15 +2355,45 @@ function dibujarVistaPreviaRecorteINE() {
 
   ctx.drawImage(src, drawX, drawY, drawW, drawH);
 
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+  // Sombreado exterior
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.58)';
   ctx.fillRect(0, 0, visorW, marcoY);
   ctx.fillRect(0, marcoY + marcoH, visorW, visorH - (marcoY + marcoH));
   ctx.fillRect(0, marcoY, marcoX, marcoH);
   ctx.fillRect(marcoX + marcoW, marcoY, visorW - (marcoX + marcoW), marcoH);
 
+  // Borde azul principal de la credencial
   ctx.strokeStyle = '#38bdf8';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(marcoX, marcoY, marcoW, marcoH);
+
+  // Guías visuales de las 3 ÚNICAS zonas que leerá el OCR (deja fuera Año de Registro, CURP y Clave)
+  const lado = document.getElementById('selectLadoINE')?.value || 'FRENTE';
+  if (lado === 'FRENTE') {
+    const zonasGuia = [
+      { rx: 0.27, ry: 0.19, rw: 0.41, rh: 0.21, color: '#22c55e', texto: '1. NOMBRE' },
+      { rx: 0.27, ry: 0.42, rw: 0.61, rh: 0.20, color: '#eab308', texto: '2. DOMICILIO' },
+      { rx: 0.56, ry: 0.80, rw: 0.39, rh: 0.15, color: '#38bdf8', texto: '3. SECCIÓN' }
+    ];
+
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.5;
+    ctx.font = 'bold 10px sans-serif';
+
+    zonasGuia.forEach(z => {
+      const zx = marcoX + marcoW * z.rx;
+      const zy = marcoY + marcoH * z.ry;
+      const zw = marcoW * z.rw;
+      const zh = marcoH * z.rh;
+
+      ctx.strokeStyle = z.color;
+      ctx.strokeRect(zx, zy, zw, zh);
+      ctx.fillStyle = z.color;
+      ctx.fillText(z.texto, zx + 4, zy + 11);
+    });
+    ctx.restore();
+  }
 }
 
 let eventosRecorteInicializados = false;
@@ -2468,7 +2498,6 @@ async function escanearOtroLadoINE() {
 
 // ==========================================
 // EXTRACCIÓN DE ZONA (ROI) + BINARIZACIÓN ADAPTATIVA LOCAL (BRADLEY-ROTH)
-// Elimina ondas rosas/grises y hologramas dejando tinta negra pura sobre blanco puro
 // ==========================================
 function recortarSubZonaCanvas(canvasTarjeta, rx, ry, rw, rh, anchoMinimo = 950) {
   const sx = Math.max(0, Math.round(canvasTarjeta.width * rx));
@@ -2572,10 +2601,10 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
     let debugTexto = '';
 
     if (modoLado === 'FRENTE') {
-      // ZONA 1: NOMBRE (Ignora foto a la izquierda, encabezado arriba y datos de derecha)
+      // ZONA 1: SOLO NOMBRE (x: 27% a 68%, y: 19% a 40%) -> Corta antes de SEXO y AÑO DE REGISTRO
       estadoDiv.innerHTML = '🔍 Leyendo Zona 1/3: <strong>Apellidos y Nombre(s)</strong>...';
       const canvasNombre = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.17, 0.53, 0.28, 950),
+        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.19, 0.41, 0.21, 950),
         0.87
       );
       await worker.setParameters({
@@ -2588,10 +2617,10 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
       apellidosDetectados = parsedNombre.apellidos;
       nombresDetectados = parsedNombre.nombres;
 
-      // ZONA 2: DOMICILIO / LOCALIDAD
+      // ZONA 2: SOLO DOMICILIO (x: 27% a 88%, y: 42% a 62%) -> Se detiene antes de CLAVE DE ELECTOR y CURP
       estadoDiv.innerHTML = '🔍 Leyendo Zona 2/3: <strong>Localidad / Colonia</strong>...';
       const canvasDom = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.41, 0.60, 0.27, 950),
+        recortarSubZonaCanvas(canvasTarjeta, 0.27, 0.42, 0.61, 0.20, 950),
         0.88
       );
       await worker.setParameters({
@@ -2602,10 +2631,10 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
       const txtDom = resDom.data.text || '';
       localidadDetectada = parsearZonaLocalidadINE(txtDom);
 
-      // ZONA 3: SECCIÓN ELECTORAL (Solo 4 dígitos)
+      // ZONA 3: SOLO SECCIÓN (x: 56% a 95%, y: 80% a 95%) -> Debajo de AÑO DE REGISTRO y CURP
       estadoDiv.innerHTML = '🔍 Leyendo Zona 3/3: <strong>Sección Electoral</strong>...';
       const canvasSecc = binarizarAdaptativoCanvas(
-        recortarSubZonaCanvas(canvasTarjeta, 0.68, 0.60, 0.30, 0.34, 700),
+        recortarSubZonaCanvas(canvasTarjeta, 0.56, 0.80, 0.39, 0.15, 700),
         0.86
       );
       await worker.setParameters({
@@ -2616,11 +2645,10 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
       const txtSecc = resSecc.data.text || '';
       seccionDetectada = parsearZonaSeccionINE(txtSecc);
 
-      debugTexto = `[ZONA NOMBRE]\n${txtNombre.trim()}\n\n[ZONA DOMICILIO]\n${txtDom.trim()}\n\n[ZONA SECCIÓN]\n${txtSecc.trim()}`;
-      document.getElementById('badgeTipoLecturaINE').innerText = 'Frente (3 Zonas ROI)';
+      debugTexto = `[1. NOMBRE]\n${txtNombre.trim()}\n\n[2. DOMICILIO]\n${txtDom.trim()}\n\n[3. SECCIÓN]\n${txtSecc.trim()}`;
+      document.getElementById('badgeTipoLecturaINE').innerText = 'Frente (3 Zonas Exactas)';
 
     } else if (modoLado === 'REVERSO') {
-      // ZONA MRZ INFERIOR DEL REVERSO (OCR-B estándar)
       estadoDiv.innerHTML = '🔍 Leyendo código MRZ del reverso...';
       const canvasMRZ = binarizarAdaptativoCanvas(
         recortarSubZonaCanvas(canvasTarjeta, 0.03, 0.63, 0.94, 0.35, 1100),
@@ -2636,12 +2664,12 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
       apellidosDetectados = parsedMRZ.apellidos;
       nombresDetectados = parsedMRZ.nombres;
 
-      debugTexto = `[ZONA MRZ REVERSO]\n${txtMRZ.trim()}`;
+      debugTexto = `[REVERSO MRZ]\n${txtMRZ.trim()}`;
       document.getElementById('badgeTipoLecturaINE').innerText = 'Reverso MRZ';
 
     } else {
-      // MODO HOJA / COPIA COMPLETA SIN ENCUADRE
-      estadoDiv.innerHTML = '🔍 Leyendo documento completo...';
+      // MODO COPIA COMPLETA: Aísla estrictamente por etiquetas NOMBRE / DOMICILIO / SECCIÓN
+      estadoDiv.innerHTML = '🔍 Extrayendo únicamente Nombre, Domicilio y Sección...';
       const canvasFull = binarizarAdaptativoCanvas(
         recortarSubZonaCanvas(canvasTarjeta, 0, 0, 1, 1, 1300),
         0.88
@@ -2654,17 +2682,16 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
       const txtFull = resFull.data.text || '';
 
       const mrzTry = parsearZonaMRZINE(txtFull);
-      const nomTry = parsearZonaNombreINE(txtFull);
+      const nomTry = extraerBloqueAcotadoNombreINE(txtFull);
       apellidosDetectados = mrzTry.apellidos || nomTry.apellidos;
       nombresDetectados = mrzTry.nombres || nomTry.nombres;
-      localidadDetectada = parsearZonaLocalidadINE(txtFull);
+      localidadDetectada = extraerBloqueAcotadoDomicilioINE(txtFull);
       seccionDetectada = parsearZonaSeccionINE(txtFull);
 
-      debugTexto = `[LECTURA COMPLETA]\n${txtFull.trim()}`;
-      document.getElementById('badgeTipoLecturaINE').innerText = 'Copia Completa';
+      debugTexto = `[COPIA COMPLETA ACOTADA]\n${txtFull.trim()}`;
+      document.getElementById('badgeTipoLecturaINE').innerText = 'Copia Acotada';
     }
 
-    // Conservar datos previos si se está escaneando el segundo lado de la misma INE
     const apPrev = document.getElementById('ineDetectadoApellidos').value.trim();
     const nomPrev = document.getElementById('ineDetectadoNombres').value.trim();
     const secPrev = document.getElementById('ineDetectadoSeccion').value.trim();
@@ -2691,15 +2718,24 @@ async function ejecutarLecturaINE(canvasTarjeta, modoLado = 'FRENTE') {
 }
 
 // ==========================================
-// PARSERS ESPECIALIZADOS POR ZONA DE LA INE
+// PARSERS CON EXCLUSIÓN ESTRICTA DE OTROS CAMPOS INE
 // ==========================================
+function esLineaRuidoINE(linea) {
+  if (!linea) return true;
+  const u = linea.toUpperCase();
+  if (/(?:REGISTRO|VIGENCIA|EMISI[OÓ]N|ELECTOR|CURP|ESTADO|MUNICIPIO|LOCALIDAD|SEXO|INSTITUTO|NACIONAL|CREDENCIAL|VOTAR|M[EÉ]XICO|NACIMIENTO|FECHA)/.test(u)) {
+    return true;
+  }
+  if (/[A-Z]{4}\d{6}/.test(u.replace(/\s+/g, ''))) {
+    return true;
+  }
+  return false;
+}
+
 function limpiarTokensNombreINE(linea) {
-  if (!linea) return '';
+  if (!linea || esLineaRuidoINE(linea)) return '';
   const palabrasIgnorar = new Set([
-    'NOMBRE', 'NOMBRES', 'INSTITUTO', 'NACIONAL', 'ELECTORAL', 'CREDENCIAL',
-    'PARA', 'VOTAR', 'MEXICO', 'MÉXICO', 'SEXO', 'DOMICILIO', 'CLAVE',
-    'ELECTOR', 'CURP', 'ESTADO', 'MUNICIPIO', 'LOCALIDAD', 'SECCION',
-    'SECCIÓN', 'EMISION', 'EMISIÓN', 'VIGENCIA', 'FECHA', 'NACIMIENTO'
+    'NOMBRE', 'NOMBRES', 'APELLIDO', 'PATERNO', 'MATERNO', 'DOMICILIO', 'SECCION', 'SECCIÓN'
   ]);
 
   return linea
@@ -2711,9 +2747,7 @@ function limpiarTokensNombreINE(linea) {
     .filter(tok => {
       if (!tok) return false;
       if (palabrasIgnorar.has(tok)) return false;
-      // Eliminar caracteres sueltos de 1 letra (ruido de holograma), salvo 'Y'
       if (tok.length === 1 && tok !== 'Y') return false;
-      // Eliminar pares de consonantes idénticas generados por bordes de holograma (ej. II, LL, MM, NN)
       if (tok.length === 2 && tok[0] === tok[1] && !'AEIOU'.includes(tok[0])) return false;
       return true;
     })
@@ -2724,6 +2758,7 @@ function limpiarTokensNombreINE(linea) {
 function parsearZonaNombreINE(texto) {
   const lineas = texto
     .split(/\r?\n/)
+    .filter(l => !esLineaRuidoINE(l))
     .map(l => limpiarTokensNombreINE(l))
     .filter(l => l.length >= 2);
 
@@ -2752,12 +2787,43 @@ function parsearZonaNombreINE(texto) {
   return { apellidos: '', nombres: '' };
 }
 
+function extraerBloqueAcotadoNombreINE(textoCompleto) {
+  const lineas = textoCompleto.split(/\r?\n/).map(l => l.trim().toUpperCase()).filter(Boolean);
+  const idxInicio = lineas.findIndex(l => /\bNOMBRE\b/.test(l));
+  const idxFin = lineas.findIndex((l, i) => i > idxInicio && /\bDOMICILIO\b/.test(l));
+
+  if (idxInicio !== -1) {
+    const fin = idxFin !== -1 ? idxFin : Math.min(lineas.length, idxInicio + 5);
+    const bloque = lineas.slice(idxInicio + 1, fin).join('\n');
+    return parsearZonaNombreINE(bloque);
+  }
+  return parsearZonaNombreINE(textoCompleto);
+}
+
+function extraerBloqueAcotadoDomicilioINE(textoCompleto) {
+  const lineas = textoCompleto.split(/\r?\n/).map(l => l.trim().toUpperCase()).filter(Boolean);
+  const idxInicio = lineas.findIndex(l => /\bDOMICILIO\b/.test(l));
+  const idxFin = lineas.findIndex((l, i) => i > idxInicio && /(?:CLAVE|ELECTOR|CURP|REGISTRO|SECCI[OÓ]N)/.test(l));
+
+  if (idxInicio !== -1) {
+    const fin = idxFin !== -1 ? idxFin : Math.min(lineas.length, idxInicio + 5);
+    const bloque = lineas.slice(idxInicio + 1, fin).join('\n');
+    return parsearZonaLocalidadINE(bloque);
+  }
+  return parsearZonaLocalidadINE(textoCompleto);
+}
+
 function parsearZonaSeccionINE(texto) {
   const limpio = texto.toUpperCase().replace(/\s+/g, ' ');
-  const matchExplicito = limpio.match(/SECCION\s*(\d{4})/);
-  if (matchExplicito) return matchExplicito[1];
 
-  const candidatos = limpio.match(/\b\d{4}\b/g) || [];
+  const matchExplicito = limpio.match(/SECCI[OÓ]N\s*(\d{4})/);
+  if (matchExplicito && !/^(19|20)\d{2}$/.test(matchExplicito[1])) {
+    return matchExplicito[1];
+  }
+
+  const candidatos = (limpio.match(/\b\d{4}\b/g) || [])
+    .filter(num => !/^(19|20)\d{2}$/.test(num));
+
   const oficial = candidatos.find(num => SECCIONES_CUNDUACAN.includes(num));
   if (oficial) return oficial;
 
@@ -2810,7 +2876,6 @@ function autocorregirLocalidadCunduacan(textoCrudo) {
     }
   }
 
-  // Si coincide al menos en un 74% con una localidad oficial de Cunduacán, devolver el nombre limpio oficial
   if (mejorMatch && mejorSimilitud >= 0.74) {
     return mejorMatch;
   }
@@ -2821,17 +2886,15 @@ function parsearZonaLocalidadINE(texto) {
   const lineas = texto
     .split(/\r?\n/)
     .map(l => l.trim().toUpperCase())
-    .filter(l => l.length >= 3 && !/^DOMICILIO$/.test(l));
+    .filter(l => l.length >= 3 && !/^DOMICILIO$/.test(l) && !esLineaRuidoINE(l));
 
   if (lineas.length === 0) return '';
 
-  // Buscar línea con prefijo de asentamiento (COL, R/A, EJ, POB, FRACC, VILLA)
   const lineaAsentamiento = lineas.find(l => /\b(?:COL|R\/A|RA|EJ|POB|FRACC|VILLA|CONG|LOC)\.?\s+[A-ZÁÉÍÓÚÑÜ]/.test(l));
   if (lineaAsentamiento) {
     return autocorregirLocalidadCunduacan(lineaAsentamiento);
   }
 
-  // Si no tiene prefijo claro, tomar la línea intermedia (típicamente línea 2 del domicilio, antes de Municipio/Estado)
   const idxMpio = lineas.findIndex(l => /CUNDUAC/.test(l));
   if (idxMpio > 0) {
     return autocorregirLocalidadCunduacan(lineas[idxMpio - 1]);
@@ -2849,11 +2912,9 @@ function parsearZonaMRZINE(texto) {
     .map(l => l.replace(/\s+/g, '').toUpperCase())
     .filter(l => l.length >= 10);
 
-  // Buscar la línea de nombres MRZ (contiene '<<' y NO empieza con IDMEX ni dígitos)
   const lineaNombre = lineas.find(l => l.includes('<<') && !l.startsWith('IDMEX') && !/^\d{6}/.test(l));
   if (!lineaNombre) return { apellidos: '', nombres: '' };
 
-  // En la línea de nombres MRZ no existen dígitos: corregir confusiones típicas de OCR
   const corregida = lineaNombre
     .replace(/0/g, 'O')
     .replace(/1/g, 'I')

@@ -609,7 +609,7 @@
 
   </div>
 
-  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + ENCUADRE + LECTURA POR ZONAS ROI) -->
+  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + ENCUADRE + LECTURA SOLO DE NOMBRE, DOMICILIO Y SECCIÓN) -->
   <div id="modalEscanerINE" class="modal">
     <div class="modal-content" style="max-width: 560px; max-height: 92vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -661,7 +661,7 @@
       <!-- PASO 2: ENCUADRE Y RECORTE DE LA CREDENCIAL -->
       <div id="pasoRecorteINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="font-size: 0.83rem; font-weight: 700; color: #1e40af; margin-bottom: 6px;">
-          ✂️ Ajusta los 4 bordes de la credencial dentro del marco azul:
+          ✂️ Alinea la credencial con las 3 cajas (1. Nombre, 2. Domicilio, 3. Sección):
         </div>
         <div style="position: relative; width: 100%; background: #0f172a; border-radius: 6px; overflow: hidden; touch-action: none;">
           <canvas id="canvasRecorteINE" style="width: 100%; display: block; cursor: grab;"></canvas>
@@ -682,8 +682,8 @@
           <label for="selectLadoINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
             Lado capturado:
           </label>
-          <select id="selectLadoINE" style="flex: 1; padding: 4px 6px; font-size: 0.82rem; border: 1px solid #94a3b8; border-radius: 4px;">
-            <option value="FRENTE">🪪 Frente (Nombre, Sección, Localidad)</option>
+          <select id="selectLadoINE" onchange="dibujarVistaPreviaRecorteINE()" style="flex: 1; padding: 4px 6px; font-size: 0.82rem; border: 1px solid #94a3b8; border-radius: 4px;">
+            <option value="FRENTE">🪪 Frente (Nombre, Domicilio, Sección)</option>
             <option value="REVERSO">🔄 Reverso (Lectura MRZ de Nombre y Apellidos)</option>
             <option value="COMPLETA">📄 Hoja / Copia completa sin encuadre</option>
           </select>
@@ -839,6 +839,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
