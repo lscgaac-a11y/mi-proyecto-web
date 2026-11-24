@@ -12,13 +12,14 @@ let cacheAvances = [];
 let cacheSimpatizantes = [];
 let cachePromotores = [];
 let cacheEstructura = [];
+let seccionesSeleccionadasEst = new Set();
 let destinoINEActual = null;
 
 // ==========================================
 // INICIALIZACIÓN
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-  poblarDatalistSecciones();
+  poblarCatalogosIniciales();
   configurarEventosFormularios();
   configurarListenerCamaraINE();
 
@@ -33,14 +34,71 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function poblarDatalistSecciones() {
+function poblarCatalogosIniciales() {
+  // Datalist 60 secciones
   const dl = document.getElementById('lista-secciones-cunduacan');
-  if (!dl) return;
-  dl.innerHTML = SECCIONES_CUNDUACAN.map(sec => `<option value="${sec}"></option>`).join('');
+  if (dl) {
+    dl.innerHTML = SECCIONES_CUNDUACAN.map(sec => `<option value="${sec}"></option>`).join('');
+  }
+
+  // Selects de 20 Zonas y 37 Rutas
+  const selZona = document.getElementById('est-zona');
+  const filtroZona = document.getElementById('filtro-est-zona');
+  if (selZona && filtroZona) {
+    for (let z = 1; z <= 20; z++) {
+      selZona.innerHTML += `<option value="${z}">Zona ${z}</option>`;
+      filtroZona.innerHTML += `<option value="${z}">Zona ${z}</option>`;
+    }
+  }
+
+  const selRuta = document.getElementById('est-ruta');
+  if (selRuta) {
+    for (let r = 1; r <= 37; r++) {
+      selRuta.innerHTML += `<option value="${r}">Ruta ${r}</option>`;
+    }
+  }
+
+  renderizarChipsSeccionesEstructura();
 }
 
 // ==========================================
-// ESCANEO DE CREDENCIAL INE CON GEMINI
+// NAVEGACIÓN BARRA LATERAL Y MÓVIL
+// ==========================================
+function abrirSidebarMovil() {
+  document.getElementById('sidebar').classList.add('abierta');
+  document.getElementById('overlay-sidebar').classList.add('activa');
+}
+
+function cerrarSidebarMovil() {
+  document.getElementById('sidebar').classList.remove('abierta');
+  document.getElementById('overlay-sidebar').classList.remove('activa');
+}
+
+function navegarA(idSeccion, titulo) {
+  document.querySelectorAll('.vista-seccion').forEach(sec => sec.classList.add('oculto'));
+  document.querySelectorAll('.menu-item').forEach(btn => btn.classList.remove('activo'));
+
+  const sec = document.getElementById(idSeccion);
+  const btn = document.querySelector(`.menu-item[data-vista="${idSeccion}"]`);
+  if (sec) sec.classList.remove('oculto');
+  if (btn) btn.classList.add('activo');
+  if (titulo) document.getElementById('titulo-vista-actual').textContent = titulo;
+
+  cerrarSidebarMovil();
+
+  if (idSeccion === 'sec-avances') cargarTodo();
+  if (idSeccion === 'sec-simpatizantes') cargarSimpatizantes();
+  if (idSeccion === 'sec-pase-lista') cargarSimpatizantes();
+  if (idSeccion === 'sec-promotores') cargarPromotores();
+  if (idSeccion === 'sec-estructura') {
+    cargarEstructura();
+    renderizarChipsSeccionesEstructura();
+  }
+  if (idSeccion === 'sec-usuarios' && usuarioActual?.rol === 'admin') cargarUsuarios();
+}
+
+// ==========================================
+// ESCANEO DE CREDENCIAL INE CON GOOGLE GEMINI
 // ==========================================
 function iniciarEscaneoINE(destino) {
   destinoINEActual = destino;
@@ -72,7 +130,7 @@ function optimizarImagenINE(archivo, maxAncho = 1280, calidad = 0.82) {
       img.onerror = () => reject(new Error('No se pudo leer la imagen.'));
       img.src = e.target.result;
     };
-    lector.onerror = () => reject(new Error('Error al abrir el archivo.'));
+    lector.onerror = () => reject(new Error('Error al abrir la imagen.'));
     lector.readAsDataURL(archivo);
   });
 }
@@ -86,25 +144,23 @@ function mostrarEstadoINE(destino, mensaje, tipo = 'info') {
   const caja = document.getElementById(mapaCajas[destino]);
   if (!caja) return;
 
-  const colores = {
-    info: { texto: '#1d4ed8', borde: '#1d4ed8', fondo: '#eff6ff' },
-    ok: { texto: '#15803d', borde: '#15803d', fondo: '#f0fdf4' },
-    alerta: { texto: '#b45309', borde: '#b45309', fondo: '#fffbeb' },
-    error: { texto: '#b91c1c', borde: '#b91c1c', fondo: '#fef2f2' }
+  const estilos = {
+    info: { texto: '#6a1b9a', borde: '#8e24aa', fondo: '#f3e5f5' },
+    ok: { texto: '#15803d', borde: '#15803d', fondo: '#dcfce7' },
+    alerta: { texto: '#b45309', borde: '#b45309', fondo: '#fef3c7' },
+    error: { texto: '#b91c1c', borde: '#b91c1c', fondo: '#fee2e2' }
   };
-  const estilo = colores[tipo] || colores.info;
-  caja.style.color = estilo.texto;
-  caja.style.borderLeftColor = estilo.borde;
-  caja.style.background = estilo.fondo;
+  const st = estilos[tipo] || estilos.info;
+  caja.style.color = st.texto;
+  caja.style.borderLeftColor = st.borde;
+  caja.style.background = st.fondo;
   caja.textContent = mensaje;
   caja.classList.remove('oculto');
 }
 
 function asignarValor(id, valor) {
   const el = document.getElementById(id);
-  if (el && valor) {
-    el.value = valor;
-  }
+  if (el && valor) el.value = valor;
 }
 
 function configurarListenerCamaraINE() {
@@ -117,8 +173,7 @@ function configurarListenerCamaraINE() {
 
     const destino = destinoINEActual;
     try {
-      mostrarEstadoINE(destino, 'Procesando imagen y extrayendo datos de la INE...', 'info');
-
+      mostrarEstadoINE(destino, 'Analizando credencial INE con Gemini AI...', 'info');
       const imagenBase64 = await optimizarImagenINE(archivo);
 
       const res = await fetch('/api/ine/escanear', {
@@ -128,7 +183,6 @@ function configurarListenerCamaraINE() {
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.ok) {
         mostrarEstadoINE(destino, data.error || 'No se pudo leer la credencial.', 'error');
         return;
@@ -149,10 +203,9 @@ function configurarListenerCamaraINE() {
         asignarValor('est-nombres', nombres);
         asignarValor('est-apellidos', apellidos);
         asignarValor('est-localidad', localidad);
-        const campoSec = document.getElementById('est-seccion');
-        if (campoSec && seccion) {
-          const actual = campoSec.value.trim();
-          campoSec.value = actual ? `${actual}, ${seccion}` : seccion;
+        if (seccion && SECCIONES_CUNDUACAN.includes(seccion)) {
+          seccionesSeleccionadasEst.add(seccion);
+          renderizarChipsSeccionesEstructura();
         }
       }
 
@@ -163,17 +216,17 @@ function configurarListenerCamaraINE() {
           'alerta'
         );
       } else {
-        mostrarEstadoINE(destino, 'Credencial leída con éxito. Revisa los datos y guarda.', 'ok');
+        mostrarEstadoINE(destino, 'Credencial INE leída correctamente. Verifica los datos y guarda.', 'ok');
       }
     } catch (error) {
       console.error('Error escaneo INE:', error);
-      mostrarEstadoINE(destino, 'Error de red al analizar la credencial.', 'error');
+      mostrarEstadoINE(destino, 'Error de conexión al procesar la credencial.', 'error');
     }
   });
 }
 
 // ==========================================
-// AUTENTICACIÓN Y NAVEGACIÓN
+// LOGIN Y SESIÓN
 // ==========================================
 function configurarEventosFormularios() {
   document.getElementById('form-login').addEventListener('submit', async (e) => {
@@ -226,31 +279,33 @@ function configurarEventosFormularios() {
 function iniciarSesionUI() {
   document.getElementById('vista-login').classList.add('oculto');
   document.getElementById('vista-app').classList.remove('oculto');
-  document.getElementById('info-usuario-activo').textContent =
-    `${usuarioActual.usuario} (${usuarioActual.rol}${usuarioActual.seccion_asignada ? ' - Sec. ' + usuarioActual.seccion_asignada : ''})`;
+
+  document.getElementById('sidebar-nombre-usuario').textContent = usuarioActual.usuario;
+  document.getElementById('sidebar-rol-usuario').textContent =
+    usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada
+      ? `Pase de Lista · Sec. ${usuarioActual.seccion_asignada}`
+      : usuarioActual.rol;
 
   if (usuarioActual.requiere_cambio) {
     document.getElementById('modal-password').classList.remove('oculto');
   }
 
-  // Permisos por rol
-  const btnUsuarios = document.getElementById('btn-tab-usuarios');
+  const menuUsuarios = document.getElementById('menu-usuarios');
   if (usuarioActual.rol !== 'admin') {
-    btnUsuarios.classList.add('oculto');
+    menuUsuarios.classList.add('oculto');
   } else {
-    btnUsuarios.classList.remove('oculto');
+    menuUsuarios.classList.remove('oculto');
   }
 
   if (usuarioActual.rol === 'pase_lista') {
-    document.querySelectorAll('#nav-tabs button').forEach(btn => {
-      if (btn.dataset.tab !== 'tab-simpatizantes') btn.classList.add('oculto');
+    document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
+      if (btn.dataset.vista !== 'sec-pase-lista') btn.classList.add('oculto');
     });
-    document.getElementById('bloque-form-simpatizante').classList.add('oculto');
-    document.getElementById('herramientas-excel-simp').classList.add('oculto');
-    cambiarPestana('tab-simpatizantes');
+    cargarSimpatizantes();
+    navegarA('sec-pase-lista', `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`);
   } else {
     cargarTodo();
-    cambiarPestana('tab-avances');
+    navegarA('sec-avances', 'Avances y Resumen General');
   }
 }
 
@@ -260,32 +315,19 @@ function cerrarSesion() {
   location.reload();
 }
 
-function cambiarPestana(idTab) {
-  document.querySelectorAll('.panel-tab').forEach(p => p.classList.add('oculto'));
-  document.querySelectorAll('#nav-tabs button').forEach(b => b.classList.remove('activo'));
-
-  const panel = document.getElementById(idTab);
-  const boton = document.querySelector(`#nav-tabs button[data-tab="${idTab}"]`);
-  if (panel) panel.classList.remove('oculto');
-  if (boton) boton.classList.add('activo');
-
-  if (idTab === 'tab-avances') cargarAvances();
-  if (idTab === 'tab-simpatizantes') cargarSimpatizantes();
-  if (idTab === 'tab-promotores') cargarPromotores();
-  if (idTab === 'tab-estructura') cargarEstructura();
-  if (idTab === 'tab-usuarios' && usuarioActual.rol === 'admin') cargarUsuarios();
-}
-
-function cargarTodo() {
-  cargarAvances();
-  cargarSimpatizantes();
-  cargarPromotores();
-  cargarEstructura();
-  if (usuarioActual && usuarioActual.rol === 'admin') cargarUsuarios();
+async function cargarTodo() {
+  await Promise.all([
+    cargarAvances(),
+    cargarSimpatizantes(),
+    cargarPromotores(),
+    cargarEstructura()
+  ]);
+  renderizarAvances();
+  if (usuarioActual?.rol === 'admin') cargarUsuarios();
 }
 
 // ==========================================
-// 1. AVANCES POR SECCIÓN
+// 1. AVANCES Y RESUMEN GENERAL
 // ==========================================
 async function cargarAvances() {
   const res = await fetch('/api/avances');
@@ -296,8 +338,9 @@ async function cargarAvances() {
 }
 
 function renderizarAvances() {
-  const mapa = new Map(cacheAvances.map(a => [a.seccion, a]));
-  const filtro = (document.getElementById('filtro-avances-seccion').value || '').trim();
+  const mapaAvances = new Map(cacheAvances.map(a => [a.seccion, a]));
+  const fSec = (document.getElementById('filtro-avances-seccion').value || '').trim();
+  const fEst = document.getElementById('filtro-avances-estado').value;
 
   let totalReg = 0;
   let totalAsis = 0;
@@ -310,28 +353,73 @@ function renderizarAvances() {
   });
 
   const pctGlobal = totalReg > 0 ? ((totalAsis / totalReg) * 100).toFixed(1) : '0.0';
+  const pctSecciones = ((seccionesActivas / 60) * 100).toFixed(1);
+
   document.getElementById('kpi-registrados').textContent = totalReg;
   document.getElementById('kpi-asistieron').textContent = totalAsis;
   document.getElementById('kpi-porcentaje').textContent = `${pctGlobal}%`;
+  document.getElementById('barra-asistencia-global').style.width = `${pctGlobal}%`;
+  document.getElementById('kpi-promotores').textContent = cachePromotores.length;
   document.getElementById('kpi-secciones').textContent = `${seccionesActivas} / 60`;
+  document.getElementById('barra-secciones-activas').style.width = `${pctSecciones}%`;
 
   const tbody = document.getElementById('tabla-avances-body');
-  const lista = SECCIONES_CUNDUACAN.filter(sec => !filtro || sec.includes(filtro));
+  const lista = SECCIONES_CUNDUACAN.filter(sec => {
+    const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
+    if (fSec && !sec.includes(fSec)) return false;
+    if (fEst === 'con' && dato.total_registrados === 0) return false;
+    if (fEst === 'sin' && dato.total_registrados > 0) return false;
+    return true;
+  });
 
   tbody.innerHTML = lista.map(sec => {
-    const dato = mapa.get(sec) || { total_registrados: 0, total_asistieron: 0 };
+    const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
+    const pendientes = Math.max(0, dato.total_registrados - dato.total_asistieron);
     const pct = dato.total_registrados > 0
       ? ((dato.total_asistieron / dato.total_registrados) * 100).toFixed(1)
       : '0.0';
+
+    const promsSec = cachePromotores.filter(p => p.seccion === sec).length;
+    const coordSec = cacheEstructura.find(
+      e => e.rol === 'Coordinador de Sección' && String(e.seccion).split(',').map(s => s.trim()).includes(sec)
+    );
+
     return `
       <tr>
-        <td><strong>${sec}</strong></td>
-        <td>${dato.total_registrados}</td>
-        <td>${dato.total_asistieron}</td>
-        <td>${pct}%</td>
+        <td><span class="badge badge-morado">${sec}</span></td>
+        <td>${coordSec ? `${coordSec.nombres} ${coordSec.apellidos}` : '<span style="color:#9ca3af;">Sin asignar</span>'}</td>
+        <td>${promsSec}</td>
+        <td><strong>${dato.total_registrados}</strong></td>
+        <td style="color:var(--verde); font-weight:700;">${dato.total_asistieron}</td>
+        <td>${pendientes}</td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="progreso-wrap" style="margin-top:0;"><div class="progreso-barra verde" style="width:${pct}%;"></div></div>
+            <span style="font-size:0.82rem; font-weight:700;">${pct}%</span>
+          </div>
+        </td>
       </tr>
     `;
   }).join('');
+}
+
+function exportarExcelAvances() {
+  const mapaAvances = new Map(cacheAvances.map(a => [a.seccion, a]));
+  const filas = SECCIONES_CUNDUACAN.map(sec => {
+    const d = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
+    const pct = d.total_registrados > 0 ? ((d.total_asistieron / d.total_registrados) * 100).toFixed(1) + '%' : '0%';
+    return {
+      Seccion: sec,
+      Registrados: d.total_registrados,
+      Asistieron: d.total_asistieron,
+      Pendientes: Math.max(0, d.total_registrados - d.total_asistieron),
+      Avance: pct
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Avances_60_Secciones');
+  XLSX.writeFile(wb, 'Avances_Secciones_Cunduacan_2027.xlsx');
 }
 
 // ==========================================
@@ -346,39 +434,81 @@ async function cargarSimpatizantes() {
   if (res.ok) {
     cacheSimpatizantes = await res.json();
     renderizarSimpatizantes();
+    renderizarPaseLista();
   }
 }
 
 function renderizarSimpatizantes() {
   const fSec = (document.getElementById('filtro-simp-seccion').value || '').trim();
   const fBusq = (document.getElementById('filtro-simp-busqueda').value || '').trim().toUpperCase();
+  const fAsis = document.getElementById('filtro-simp-asistencia').value;
 
   const filtrados = cacheSimpatizantes.filter(s => {
-    const okSec = !fSec || String(s.seccion).includes(fSec);
-    const okBusq = !fBusq ||
-      String(s.nombre || '').toUpperCase().includes(fBusq) ||
-      String(s.localidad || '').toUpperCase().includes(fBusq);
-    return okSec && okBusq;
+    if (fSec && !String(s.seccion).includes(fSec)) return false;
+    if (fAsis === 'si' && !s.asistio) return false;
+    if (fAsis === 'no' && s.asistio) return false;
+    if (fBusq) {
+      const texto = `${s.nombre} ${s.localidad} ${s.referencia} ${s.telefono}`.toUpperCase();
+      if (!texto.includes(fBusq)) return false;
+    }
+    return true;
   });
 
-  const esPaseLista = usuarioActual.rol === 'pase_lista';
+  document.getElementById('contador-simpatizantes').textContent = filtrados.length;
   const tbody = document.getElementById('tabla-simpatizantes-body');
 
   tbody.innerHTML = filtrados.map(s => `
     <tr>
       <td>
-        <input type="checkbox" ${s.asistio ? 'checked' : ''} onchange="toggleAsistencia(${s.id}, this.checked)" style="width:18px; height:18px; cursor:pointer;" />
+        <input type="checkbox" ${s.asistio ? 'checked' : ''} onchange="toggleAsistencia(${s.id}, this.checked)" style="width:18px; height:18px; accent-color: var(--morado-principal); cursor:pointer;" />
       </td>
-      <td><strong>${s.seccion}</strong></td>
-      <td>${s.nombre}</td>
+      <td><span class="badge badge-morado">${s.seccion}</span></td>
+      <td><strong>${s.nombre}</strong></td>
       <td>${s.telefono || ''}</td>
       <td>${s.localidad || ''}</td>
       <td>${s.referencia || ''}</td>
+      <td class="no-print">
+        <button type="button" class="btn btn-sm btn-editar" onclick="editarSimpatizante(${s.id})">Editar</button>
+        <button type="button" class="btn btn-sm btn-rojo" onclick="eliminarSimpatizante(${s.id})">Eliminar</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderizarPaseLista() {
+  const fSec = (document.getElementById('pl-filtro-seccion').value || '').trim();
+  const fNom = (document.getElementById('pl-filtro-nombre').value || '').trim().toUpperCase();
+  const fEst = document.getElementById('pl-filtro-estado').value;
+
+  const filtrados = cacheSimpatizantes.filter(s => {
+    if (fSec && !String(s.seccion).includes(fSec)) return false;
+    if (fEst === 'si' && !s.asistio) return false;
+    if (fEst === 'no' && s.asistio) return false;
+    if (fNom && !`${s.nombre} ${s.localidad}`.toUpperCase().includes(fNom)) return false;
+    return true;
+  });
+
+  const asistieron = filtrados.filter(s => s.asistio).length;
+  document.getElementById('pl-total').textContent = filtrados.length;
+  document.getElementById('pl-asistieron').textContent = asistieron;
+  document.getElementById('pl-pendientes').textContent = filtrados.length - asistieron;
+
+  const tbody = document.getElementById('tabla-pase-lista-body');
+  tbody.innerHTML = filtrados.map(s => `
+    <tr>
       <td>
-        ${esPaseLista ? '' : `
-          <button type="button" class="btn btn-editar" onclick="editarSimpatizante(${s.id})">Editar</button>
-          <button type="button" class="btn btn-rojo" onclick="eliminarSimpatizante(${s.id})">Eliminar</button>
-        `}
+        ${s.asistio
+          ? '<span class="badge badge-verde">Asistió</span>'
+          : '<span class="badge badge-ambar">Pendiente</span>'}
+      </td>
+      <td><span class="badge badge-morado">${s.seccion}</span></td>
+      <td><strong>${s.nombre}</strong></td>
+      <td>${s.localidad || ''}</td>
+      <td>${s.referencia || ''}</td>
+      <td>
+        <button type="button" class="btn btn-sm ${s.asistio ? 'btn-gris' : 'btn-verde'}" onclick="toggleAsistencia(${s.id}, ${!s.asistio})">
+          ${s.asistio ? 'Desmarcar' : '✓ Confirmar Asistencia'}
+        </button>
       </td>
     </tr>
   `).join('');
@@ -406,8 +536,8 @@ async function guardarSimpatizante(e) {
 
   if (res.ok) {
     resetFormSimpatizante();
-    cargarSimpatizantes();
-    cargarAvances();
+    await cargarSimpatizantes();
+    await cargarAvances();
   } else {
     alert('Error al guardar simpatizante.');
   }
@@ -443,6 +573,8 @@ async function toggleAsistencia(id, asistio) {
   });
   const item = cacheSimpatizantes.find(s => s.id === id);
   if (item) item.asistio = asistio;
+  renderizarSimpatizantes();
+  renderizarPaseLista();
   cargarAvances();
 }
 
@@ -450,9 +582,19 @@ async function eliminarSimpatizante(id) {
   if (!confirm('¿Eliminar este simpatizante?')) return;
   const res = await fetch(`/api/simpatizantes/${id}`, { method: 'DELETE' });
   if (res.ok) {
-    cargarSimpatizantes();
-    cargarAvances();
+    await cargarSimpatizantes();
+    await cargarAvances();
   }
+}
+
+function descargarPlantillaSimpatizantes() {
+  const ejemplo = [
+    { Seccion: '0615', Nombre: 'JUAN PEREZ LOPEZ', Telefono: '9141234567', Localidad: 'R/A. HUIMANGO 1RA', Referencia: 'MARIA GOMEZ', Asistio: 'NO' }
+  ];
+  const ws = XLSX.utils.json_to_sheet(ejemplo);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+  XLSX.writeFile(wb, 'Plantilla_Simpatizantes.xlsx');
 }
 
 function exportarExcelSimpatizantes() {
@@ -467,7 +609,7 @@ function exportarExcelSimpatizantes() {
   const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Simpatizantes');
-  XLSX.writeFile(wb, 'Simpatizantes_Cunduacan.xlsx');
+  XLSX.writeFile(wb, 'Simpatizantes_Cunduacan_2027.xlsx');
 }
 
 async function importarExcelSimpatizantes(e) {
@@ -495,8 +637,8 @@ async function importarExcelSimpatizantes(e) {
   const data = await res.json();
   alert(data.mensaje || data.error);
   e.target.value = '';
-  cargarSimpatizantes();
-  cargarAvances();
+  await cargarSimpatizantes();
+  await cargarAvances();
 }
 
 // ==========================================
@@ -506,8 +648,15 @@ async function cargarPromotores() {
   const res = await fetch('/api/promotores');
   if (res.ok) {
     cachePromotores = await res.json();
+    actualizarDatalistPromotores();
     renderizarPromotores();
   }
+}
+
+function actualizarDatalistPromotores() {
+  const dl = document.getElementById('lista-promotores-registrados');
+  if (!dl) return;
+  dl.innerHTML = cachePromotores.map(p => `<option value="${p.nombre}"></option>`).join('');
 }
 
 function renderizarPromotores() {
@@ -515,24 +664,34 @@ function renderizarPromotores() {
   const fBusq = (document.getElementById('filtro-prom-busqueda').value || '').trim().toUpperCase();
 
   const filtrados = cachePromotores.filter(p => {
-    const okSec = !fSec || String(p.seccion).includes(fSec);
-    const okBusq = !fBusq || String(p.nombre || '').toUpperCase().includes(fBusq);
-    return okSec && okBusq;
+    if (fSec && !String(p.seccion).includes(fSec)) return false;
+    if (fBusq && !`${p.nombre} ${p.localidad}`.toUpperCase().includes(fBusq)) return false;
+    return true;
   });
 
+  document.getElementById('contador-promotores').textContent = filtrados.length;
   const tbody = document.getElementById('tabla-promotores-body');
-  tbody.innerHTML = filtrados.map(p => `
-    <tr>
-      <td><strong>${p.seccion}</strong></td>
-      <td>${p.nombre}</td>
-      <td>${p.telefono || ''}</td>
-      <td>${p.localidad || ''}</td>
-      <td>
-        <button type="button" class="btn btn-editar" onclick="editarPromotor(${p.id})">Editar</button>
-        <button type="button" class="btn btn-rojo" onclick="eliminarPromotor(${p.id})">Eliminar</button>
-      </td>
-    </tr>
-  `).join('');
+
+  tbody.innerHTML = filtrados.map(p => {
+    const nombreProm = String(p.nombre || '').trim().toUpperCase();
+    const totalReferidos = cacheSimpatizantes.filter(
+      s => String(s.referencia || '').trim().toUpperCase() === nombreProm
+    ).length;
+
+    return `
+      <tr>
+        <td><span class="badge badge-morado">${p.seccion}</span></td>
+        <td><strong>${p.nombre}</strong></td>
+        <td>${p.telefono || ''}</td>
+        <td>${p.localidad || ''}</td>
+        <td><span class="badge badge-verde">${totalReferidos} simpatizantes</span></td>
+        <td class="no-print">
+          <button type="button" class="btn btn-sm btn-editar" onclick="editarPromotor(${p.id})">Editar</button>
+          <button type="button" class="btn btn-sm btn-rojo" onclick="eliminarPromotor(${p.id})">Eliminar</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function guardarPromotor(e) {
@@ -556,7 +715,8 @@ async function guardarPromotor(e) {
 
   if (res.ok) {
     resetFormPromotor();
-    cargarPromotores();
+    await cargarPromotores();
+    renderizarAvances();
   } else {
     alert('Error al guardar promotor.');
   }
@@ -586,7 +746,10 @@ function resetFormPromotor() {
 async function eliminarPromotor(id) {
   if (!confirm('¿Eliminar este promotor?')) return;
   const res = await fetch(`/api/promotores/${id}`, { method: 'DELETE' });
-  if (res.ok) cargarPromotores();
+  if (res.ok) {
+    await cargarPromotores();
+    renderizarAvances();
+  }
 }
 
 function exportarExcelPromotores() {
@@ -599,7 +762,7 @@ function exportarExcelPromotores() {
   const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Promotores');
-  XLSX.writeFile(wb, 'Promotores_Cunduacan.xlsx');
+  XLSX.writeFile(wb, 'Promotores_Cunduacan_2027.xlsx');
 }
 
 async function importarExcelPromotores(e) {
@@ -625,24 +788,62 @@ async function importarExcelPromotores(e) {
   const data = await res.json();
   alert(data.mensaje || data.error);
   e.target.value = '';
-  cargarPromotores();
+  await cargarPromotores();
 }
 
 // ==========================================
-// 4. ESTRUCTURA PRINCIPAL
+// 4. ESTRUCTURA PRINCIPAL (20 ZONAS, 37 RUTAS, 60 SECCIONES)
 // ==========================================
-function toggleCampoRutaEstructura() {
+function alCambiarRolEstructura() {
   const rol = document.getElementById('est-rol').value;
   const grupoRuta = document.getElementById('grupo-est-ruta');
   const inputRuta = document.getElementById('est-ruta');
   if (rol === 'Coordinador de Zona') {
     grupoRuta.classList.add('oculto');
     inputRuta.required = false;
-    inputRuta.value = '';
   } else {
     grupoRuta.classList.remove('oculto');
     inputRuta.required = true;
   }
+  renderizarChipsSeccionesEstructura();
+}
+
+function renderizarChipsSeccionesEstructura() {
+  const grid = document.getElementById('grid-secciones-estructura');
+  if (!grid) return;
+
+  const rolActual = document.getElementById('est-rol')?.value || 'Coordinador de Zona';
+  const editId = document.getElementById('est-id')?.value;
+
+  const ocupadasPorRol = new Set();
+  cacheEstructura.forEach(item => {
+    if (editId && String(item.id) === String(editId)) return;
+    if (item.rol === rolActual && item.seccion) {
+      String(item.seccion).split(',').forEach(s => ocupadasPorRol.add(s.trim()));
+    }
+  });
+
+  grid.innerHTML = SECCIONES_CUNDUACAN.map(sec => {
+    const sel = seccionesSeleccionadasEst.has(sec);
+    const ocup = ocupadasPorRol.has(sec);
+    const clases = ['chip-seccion', sel ? 'seleccionada' : '', !sel && ocup ? 'ocupada' : ''].filter(Boolean).join(' ');
+    return `<div class="${clases}" onclick="toggleChipSeccion('${sec}')">${sec}</div>`;
+  }).join('');
+
+  const txt = document.getElementById('texto-secciones-seleccionadas');
+  if (txt) {
+    const arr = Array.from(seccionesSeleccionadasEst).sort();
+    txt.textContent = arr.length > 0 ? arr.join(', ') : 'Ninguna';
+  }
+}
+
+function toggleChipSeccion(sec) {
+  if (seccionesSeleccionadasEst.has(sec)) {
+    seccionesSeleccionadasEst.delete(sec);
+  } else {
+    seccionesSeleccionadasEst.add(sec);
+  }
+  renderizarChipsSeccionesEstructura();
 }
 
 async function cargarEstructura() {
@@ -650,26 +851,54 @@ async function cargarEstructura() {
   if (res.ok) {
     cacheEstructura = await res.json();
     renderizarEstructura();
+    renderizarChipsSeccionesEstructura();
   }
 }
 
 function renderizarEstructura() {
-  const fZona = (document.getElementById('filtro-est-zona').value || '').trim();
-  const filtrados = cacheEstructura.filter(e => !fZona || String(e.zona) === fZona);
+  // KPIs de cobertura territorial
+  const zonasCubiertas = new Set(cacheEstructura.map(e => Number(e.zona)).filter(Boolean));
+  const rutasCubiertas = new Set(cacheEstructura.map(e => Number(e.ruta)).filter(Boolean));
+  const seccionesCubiertas = new Set();
+  cacheEstructura.forEach(e => {
+    String(e.seccion || '').split(',').map(s => s.trim()).filter(Boolean).forEach(s => seccionesCubiertas.add(s));
+  });
 
+  document.getElementById('est-kpi-zonas').textContent = `${zonasCubiertas.size} / 20`;
+  document.getElementById('est-barra-zonas').style.width = `${((zonasCubiertas.size / 20) * 100).toFixed(1)}%`;
+
+  document.getElementById('est-kpi-rutas').textContent = `${rutasCubiertas.size} / 37`;
+  document.getElementById('est-barra-rutas').style.width = `${((rutasCubiertas.size / 37) * 100).toFixed(1)}%`;
+
+  document.getElementById('est-kpi-secciones').textContent = `${seccionesCubiertas.size} / 60`;
+  document.getElementById('est-barra-secciones').style.width = `${((seccionesCubiertas.size / 60) * 100).toFixed(1)}%`;
+
+  const fZona = document.getElementById('filtro-est-zona').value;
+  const fRol = document.getElementById('filtro-est-rol').value;
+  const fBusq = (document.getElementById('filtro-est-busqueda').value || '').trim().toUpperCase();
+
+  const filtrados = cacheEstructura.filter(e => {
+    if (fZona && String(e.zona) !== fZona) return false;
+    if (fRol && e.rol !== fRol) return false;
+    if (fBusq && !`${e.nombres} ${e.apellidos} ${e.seccion} ${e.localidad}`.toUpperCase().includes(fBusq)) return false;
+    return true;
+  });
+
+  document.getElementById('contador-estructura').textContent = filtrados.length;
   const tbody = document.getElementById('tabla-estructura-body');
+
   tbody.innerHTML = filtrados.map(e => `
     <tr>
-      <td>Zona ${e.zona}</td>
+      <td><strong>Zona ${e.zona}</strong></td>
       <td>${e.ruta ? 'Ruta ' + e.ruta : '-'}</td>
-      <td>${e.rol}</td>
+      <td><span class="badge badge-morado">${e.rol}</span></td>
       <td>${e.seccion}</td>
-      <td>${e.nombres} ${e.apellidos}</td>
+      <td><strong>${e.nombres} ${e.apellidos}</strong></td>
       <td>${e.telefono || ''}</td>
       <td>${e.localidad || ''}</td>
-      <td>
-        <button type="button" class="btn btn-editar" onclick="editarEstructura(${e.id})">Editar</button>
-        <button type="button" class="btn btn-rojo" onclick="eliminarEstructura(${e.id})">Eliminar</button>
+      <td class="no-print">
+        <button type="button" class="btn btn-sm btn-editar" onclick="editarEstructura(${e.id})">Editar</button>
+        <button type="button" class="btn btn-sm btn-rojo" onclick="eliminarEstructura(${e.id})">Eliminar</button>
       </td>
     </tr>
   `).join('');
@@ -678,10 +907,12 @@ function renderizarEstructura() {
 async function guardarEstructura(e) {
   e.preventDefault();
   const id = document.getElementById('est-id').value;
-  const secciones = document.getElementById('est-seccion').value
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+  const secciones = Array.from(seccionesSeleccionadasEst).sort();
+
+  if (secciones.length === 0) {
+    alert('Selecciona al menos una sección electoral.');
+    return;
+  }
 
   const payload = {
     rol: document.getElementById('est-rol').value,
@@ -706,7 +937,8 @@ async function guardarEstructura(e) {
   const data = await res.json();
   if (res.ok) {
     resetFormEstructura();
-    cargarEstructura();
+    await cargarEstructura();
+    renderizarAvances();
   } else {
     alert(data.error || 'No se pudo guardar el registro.');
   }
@@ -717,14 +949,19 @@ function editarEstructura(id) {
   if (!e) return;
   document.getElementById('est-id').value = e.id;
   document.getElementById('est-rol').value = e.rol;
-  toggleCampoRutaEstructura();
+  alCambiarRolEstructura();
   document.getElementById('est-zona').value = e.zona;
-  document.getElementById('est-ruta').value = e.ruta || '';
-  document.getElementById('est-seccion').value = e.seccion;
+  if (e.ruta) document.getElementById('est-ruta').value = e.ruta;
   document.getElementById('est-nombres').value = e.nombres;
   document.getElementById('est-apellidos').value = e.apellidos;
   document.getElementById('est-telefono').value = e.telefono || '';
   document.getElementById('est-localidad').value = e.localidad || '';
+
+  seccionesSeleccionadasEst = new Set(
+    String(e.seccion || '').split(',').map(s => s.trim()).filter(Boolean)
+  );
+  renderizarChipsSeccionesEstructura();
+
   document.getElementById('titulo-form-est').textContent = 'Editar Integrante de Estructura';
   document.getElementById('btn-cancelar-est').classList.remove('oculto');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -733,8 +970,9 @@ function editarEstructura(id) {
 function resetFormEstructura() {
   document.getElementById('form-estructura').reset();
   document.getElementById('est-id').value = '';
-  toggleCampoRutaEstructura();
-  document.getElementById('titulo-form-est').textContent = 'Registrar en Estructura Principal';
+  seccionesSeleccionadasEst.clear();
+  alCambiarRolEstructura();
+  document.getElementById('titulo-form-est').textContent = 'Registrar Integrante en Estructura Principal';
   document.getElementById('btn-cancelar-est').classList.add('oculto');
   document.getElementById('estado-ine-estructura').classList.add('oculto');
 }
@@ -742,11 +980,31 @@ function resetFormEstructura() {
 async function eliminarEstructura(id) {
   if (!confirm('¿Eliminar este integrante de la estructura?')) return;
   const res = await fetch(`/api/estructura/${id}`, { method: 'DELETE' });
-  if (res.ok) cargarEstructura();
+  if (res.ok) {
+    await cargarEstructura();
+    renderizarAvances();
+  }
+}
+
+function exportarExcelEstructura() {
+  const datos = cacheEstructura.map(e => ({
+    Zona: e.zona,
+    Ruta: e.ruta || '',
+    Cargo: e.rol,
+    Secciones: e.seccion,
+    Nombres: e.nombres,
+    Apellidos: e.apellidos,
+    Telefono: e.telefono || '',
+    Localidad: e.localidad || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(datos);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Estructura_2027');
+  XLSX.writeFile(wb, 'Estructura_Principal_Cunduacan_2027.xlsx');
 }
 
 // ==========================================
-// 5. USUARIOS (SOLO ADMIN)
+// 5. USUARIOS / EQUIPO (SOLO ADMIN)
 // ==========================================
 function toggleCampoSeccionUsuario() {
   const rol = document.getElementById('usu-rol').value;
@@ -765,12 +1023,12 @@ async function cargarUsuarios() {
   const tbody = document.getElementById('tabla-usuarios-body');
   tbody.innerHTML = usuarios.map(u => `
     <tr>
-      <td>${u.usuario}</td>
+      <td><strong>${u.usuario}</strong></td>
       <td>${u.password}</td>
-      <td>${u.rol}</td>
+      <td><span class="badge badge-morado">${u.rol}</span></td>
       <td>${u.seccion_asignada || '-'}</td>
       <td>
-        ${u.usuario === 'admin' ? '' : `<button type="button" class="btn btn-rojo" onclick="eliminarUsuario(${u.id})">Eliminar</button>`}
+        ${u.usuario === 'admin' ? '' : `<button type="button" class="btn btn-sm btn-rojo" onclick="eliminarUsuario(${u.id})">Eliminar</button>`}
       </td>
     </tr>
   `).join('');
