@@ -7,6 +7,8 @@ const SECCIONES_CUNDUACAN = [
   '1203'
 ];
 
+const META_SIMPATIZANTES_PROMOTOR = 15;
+
 let usuarioActual = null;
 let cacheAvances = [];
 let cacheSimpatizantes = [];
@@ -85,6 +87,9 @@ function navegarA(idSeccion, titulo) {
   cerrarSidebarMovil();
 
   if (idSeccion === 'sec-avances') cargarTodo();
+  if (idSeccion === 'sec-avance-promotores') {
+    Promise.all([cargarPromotores(), cargarSimpatizantes()]).then(renderizarAvancePromotores);
+  }
   if (idSeccion === 'sec-simpatizantes') cargarSimpatizantes();
   if (idSeccion === 'sec-pase-lista') cargarSimpatizantes();
   if (idSeccion === 'sec-promotores') cargarPromotores();
@@ -96,7 +101,7 @@ function navegarA(idSeccion, titulo) {
 }
 
 // ==========================================
-// ESCANEO ULTRA RÁPIDO DE CREDENCIAL INE
+// ESCANEO RÁPIDO DE CREDENCIAL INE
 // ==========================================
 function iniciarEscaneoINE(destino) {
   destinoINEActual = destino;
@@ -106,7 +111,6 @@ function iniciarEscaneoINE(destino) {
   input.click();
 }
 
-// 800px a calidad 0.72 pesa ~70 KB: sube en 0.2s y mantiene nitidez total en texto de INE
 function optimizarImagenINE(archivo, maxAncho = 800, calidad = 0.72) {
   return new Promise((resolve, reject) => {
     const lector = new FileReader();
@@ -189,11 +193,13 @@ function configurarListenerCamaraINE() {
         return;
       }
 
-      const { nombres, apellidos, seccion, localidad, es_seccion_cunduacan } = data.datos;
+      const { nombres, apellidos, curp, clave_elector, seccion, localidad, es_seccion_cunduacan } = data.datos;
       const nombreCompleto = `${nombres || ''} ${apellidos || ''}`.trim();
 
       if (destino === 'simpatizante') {
         asignarValor('simp-nombre', nombreCompleto);
+        asignarValor('simp-curp', curp);
+        asignarValor('simp-clave-elector', clave_elector);
         asignarValor('simp-seccion', seccion);
         asignarValor('simp-localidad', localidad);
       } else if (destino === 'promotor') {
@@ -326,6 +332,7 @@ async function cargarTodo() {
     cargarEstructura()
   ]);
   renderizarAvances();
+  renderizarAvancePromotores();
   if (usuarioActual?.rol === 'admin') cargarUsuarios();
 }
 
@@ -426,6 +433,106 @@ function exportarExcelAvances() {
 }
 
 // ==========================================
+// 1B. AVANCE POR PROMOTOR (100% = 15 SIMPATIZANTES)
+// ==========================================
+function calcularEstadisticasPromotores() {
+  const conteoPorReferencia = new Map();
+  cacheSimpatizantes.forEach(s => {
+    const ref = String(s.referencia || '').trim().toUpperCase();
+    if (!ref) return;
+    conteoPorReferencia.set(ref, (conteoPorReferencia.get(ref) || 0) + 1);
+  });
+
+  return cachePromotores.map(p => {
+    const nombreNorm = String(p.nombre || '').trim().toUpperCase();
+    const cantidad = conteoPorReferencia.get(nombreNorm) || 0;
+    const faltantes = Math.max(0, META_SIMPATIZANTES_PROMOTOR - cantidad);
+    const porcentaje = (cantidad / META_SIMPATIZANTES_PROMOTOR) * 100;
+    return {
+      ...p,
+      cantidad,
+      faltantes,
+      porcentaje
+    };
+  });
+}
+
+function renderizarAvancePromotores() {
+  const tbody = document.getElementById('tabla-avance-promotores-body');
+  if (!tbody) return;
+
+  const listaCompleta = calcularEstadisticasPromotores();
+  const totalPromotores = listaCompleta.length;
+  const totalVinculados = listaCompleta.reduce((acc, p) => acc + p.cantidad, 0);
+  const cumplidos = listaCompleta.filter(p => p.cantidad >= META_SIMPATIZANTES_PROMOTOR).length;
+  const metaTotalGlobal = totalPromotores * META_SIMPATIZANTES_PROMOTOR;
+  const pctGlobal = metaTotalGlobal > 0 ? ((totalVinculados / metaTotalGlobal) * 100).toFixed(1) : '0.0';
+
+  document.getElementById('ap-kpi-total-promotores').textContent = totalPromotores;
+  document.getElementById('ap-kpi-total-referidos').textContent = totalVinculados;
+  document.getElementById('ap-kpi-cumplidos').textContent = `${cumplidos} / ${totalPromotores}`;
+  document.getElementById('ap-kpi-porcentaje-global').textContent = `${pctGlobal}%`;
+  document.getElementById('ap-barra-global').style.width = `${Math.min(100, Number(pctGlobal))}%`;
+
+  const fSec = (document.getElementById('filtro-ap-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-ap-busqueda')?.value || '').trim().toUpperCase();
+  const fEst = document.getElementById('filtro-ap-estado')?.value || 'todos';
+
+  const filtrados = listaCompleta
+    .filter(p => {
+      if (fSec && !String(p.seccion).includes(fSec)) return false;
+      if (fBusq && !`${p.nombre} ${p.localidad}`.toUpperCase().includes(fBusq)) return false;
+      if (fEst === 'cumplida' && p.cantidad < META_SIMPATIZANTES_PROMOTOR) return false;
+      if (fEst === 'proceso' && (p.cantidad === 0 || p.cantidad >= META_SIMPATIZANTES_PROMOTOR)) return false;
+      if (fEst === 'cero' && p.cantidad > 0) return false;
+      return true;
+    })
+    .sort((a, b) => b.cantidad - a.cantidad || String(a.seccion).localeCompare(String(b.seccion)));
+
+  tbody.innerHTML = filtrados.map(p => {
+    const pctTexto = `${p.porcentaje.toFixed(1)}%`;
+    const anchoBarra = Math.min(100, p.porcentaje).toFixed(1);
+    const badgeClase = p.cantidad >= META_SIMPATIZANTES_PROMOTOR
+      ? 'badge-verde'
+      : (p.cantidad > 0 ? 'badge-morado' : 'badge-ambar');
+
+    return `
+      <tr>
+        <td><span class="badge badge-morado">${p.seccion}</span></td>
+        <td><strong>${p.nombre}</strong></td>
+        <td>${p.telefono || ''}</td>
+        <td>${p.localidad || ''}</td>
+        <td><span class="badge ${badgeClase}">${p.cantidad} / ${META_SIMPATIZANTES_PROMOTOR}</span></td>
+        <td>${p.faltantes === 0 ? '<span style="color:var(--verde); font-weight:700;">Meta cumplida</span>' : p.faltantes}</td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="progreso-wrap" style="margin-top:0;"><div class="progreso-barra verde" style="width:${anchoBarra}%;"></div></div>
+            <span style="font-size:0.82rem; font-weight:700;">${pctTexto}</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function exportarExcelAvancePromotores() {
+  const filas = calcularEstadisticasPromotores().map(p => ({
+    Seccion: p.seccion,
+    Promotor: p.nombre,
+    Telefono: p.telefono || '',
+    Localidad: p.localidad || '',
+    Simpatizantes: p.cantidad,
+    Meta: META_SIMPATIZANTES_PROMOTOR,
+    Faltantes: p.faltantes,
+    Porcentaje_Avance: `${p.porcentaje.toFixed(1)}%`
+  }));
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Avance_Por_Promotor');
+  XLSX.writeFile(wb, 'Avance_Por_Promotor_Cunduacan_2027.xlsx');
+}
+
+// ==========================================
 // 2. SIMPATIZANTES Y PASE DE LISTA
 // ==========================================
 async function cargarSimpatizantes() {
@@ -438,6 +545,8 @@ async function cargarSimpatizantes() {
     cacheSimpatizantes = await res.json();
     renderizarSimpatizantes();
     renderizarPaseLista();
+    renderizarPromotores();
+    renderizarAvancePromotores();
   }
 }
 
@@ -451,7 +560,7 @@ function renderizarSimpatizantes() {
     if (fAsis === 'si' && !s.asistio) return false;
     if (fAsis === 'no' && s.asistio) return false;
     if (fBusq) {
-      const texto = `${s.nombre} ${s.localidad} ${s.referencia} ${s.telefono}`.toUpperCase();
+      const texto = `${s.nombre} ${s.curp || ''} ${s.clave_elector || ''} ${s.localidad} ${s.referencia} ${s.telefono}`.toUpperCase();
       if (!texto.includes(fBusq)) return false;
     }
     return true;
@@ -467,6 +576,8 @@ function renderizarSimpatizantes() {
       </td>
       <td><span class="badge badge-morado">${s.seccion}</span></td>
       <td><strong>${s.nombre}</strong></td>
+      <td style="font-family:monospace; font-size:0.84rem;">${s.curp || '-'}</td>
+      <td style="font-family:monospace; font-size:0.84rem;">${s.clave_elector || '-'}</td>
       <td>${s.telefono || ''}</td>
       <td>${s.localidad || ''}</td>
       <td>${s.referencia || ''}</td>
@@ -522,6 +633,8 @@ async function guardarSimpatizante(e) {
   const id = document.getElementById('simp-id').value;
   const payload = {
     nombre: document.getElementById('simp-nombre').value,
+    curp: document.getElementById('simp-curp').value,
+    clave_elector: document.getElementById('simp-clave-elector').value,
     telefono: document.getElementById('simp-telefono').value,
     seccion: document.getElementById('simp-seccion').value,
     localidad: document.getElementById('simp-localidad').value,
@@ -551,6 +664,8 @@ function editarSimpatizante(id) {
   if (!s) return;
   document.getElementById('simp-id').value = s.id;
   document.getElementById('simp-nombre').value = s.nombre;
+  document.getElementById('simp-curp').value = s.curp || '';
+  document.getElementById('simp-clave-elector').value = s.clave_elector || '';
   document.getElementById('simp-telefono').value = s.telefono || '';
   document.getElementById('simp-seccion').value = s.seccion;
   document.getElementById('simp-localidad').value = s.localidad || '';
@@ -592,7 +707,16 @@ async function eliminarSimpatizante(id) {
 
 function descargarPlantillaSimpatizantes() {
   const ejemplo = [
-    { Seccion: '0615', Nombre: 'JUAN PEREZ LOPEZ', Telefono: '9141234567', Localidad: 'R/A. HUIMANGO 1RA', Referencia: 'MARIA GOMEZ', Asistio: 'NO' }
+    {
+      Seccion: '0615',
+      Nombre: 'JUAN PEREZ LOPEZ',
+      CURP: 'PELJ850412HTCRRN09',
+      Clave_Elector: 'PRLPJN85041227H100',
+      Telefono: '9141234567',
+      Localidad: 'R/A. HUIMANGO 1RA',
+      Referencia: 'MARIA GOMEZ',
+      Asistio: 'NO'
+    }
   ];
   const ws = XLSX.utils.json_to_sheet(ejemplo);
   const wb = XLSX.utils.book_new();
@@ -604,6 +728,8 @@ function exportarExcelSimpatizantes() {
   const datos = cacheSimpatizantes.map(s => ({
     Seccion: s.seccion,
     Nombre: s.nombre,
+    CURP: s.curp || '',
+    Clave_Elector: s.clave_elector || '',
     Telefono: s.telefono || '',
     Localidad: s.localidad || '',
     Referencia: s.referencia || '',
@@ -625,6 +751,8 @@ async function importarExcelSimpatizantes(e) {
 
   const registros = filas.map(f => ({
     nombre: f.Nombre || f.nombre || f.NOMBRE,
+    curp: f.CURP || f.curp || f.Curp || '',
+    clave_elector: f.Clave_Elector || f.clave_elector || f['Clave de Elector'] || f.CLAVE_ELECTOR || '',
     telefono: f.Telefono || f.telefono || f.TELEFONO || '',
     seccion: f.Seccion || f.seccion || f.SECCION,
     localidad: f.Localidad || f.localidad || f.LOCALIDAD || '',
@@ -653,6 +781,7 @@ async function cargarPromotores() {
     cachePromotores = await res.json();
     actualizarDatalistPromotores();
     renderizarPromotores();
+    renderizarAvancePromotores();
   }
 }
 
@@ -663,6 +792,9 @@ function actualizarDatalistPromotores() {
 }
 
 function renderizarPromotores() {
+  const tbody = document.getElementById('tabla-promotores-body');
+  if (!tbody) return;
+
   const fSec = (document.getElementById('filtro-prom-seccion').value || '').trim();
   const fBusq = (document.getElementById('filtro-prom-busqueda').value || '').trim().toUpperCase();
 
@@ -673,7 +805,6 @@ function renderizarPromotores() {
   });
 
   document.getElementById('contador-promotores').textContent = filtrados.length;
-  const tbody = document.getElementById('tabla-promotores-body');
 
   tbody.innerHTML = filtrados.map(p => {
     const nombreProm = String(p.nombre || '').trim().toUpperCase();
@@ -687,7 +818,7 @@ function renderizarPromotores() {
         <td><strong>${p.nombre}</strong></td>
         <td>${p.telefono || ''}</td>
         <td>${p.localidad || ''}</td>
-        <td><span class="badge badge-verde">${totalReferidos} simpatizantes</span></td>
+        <td><span class="badge badge-verde">${totalReferidos} / ${META_SIMPATIZANTES_PROMOTOR}</span></td>
         <td class="no-print">
           <button type="button" class="btn btn-sm btn-editar" onclick="editarPromotor(${p.id})">Editar</button>
           <button type="button" class="btn btn-sm btn-rojo" onclick="eliminarPromotor(${p.id})">Eliminar</button>

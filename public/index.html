@@ -3,602 +3,619 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Estructura Territorial 2027 · Cunduacán</title>
+  <title>Estructura Territorial · Cunduacán 2027</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-
-  <!-- Input oculto para cámara trasera o selección de foto INE (Gemini AI) -->
+  <!-- Input oculto para cámara / archivo INE -->
   <input type="file" id="input-foto-ine" accept="image/*" capture="environment" class="oculto" />
-
-  <!-- Catálogos dinámicos -->
   <datalist id="lista-secciones-cunduacan"></datalist>
   <datalist id="lista-promotores-registrados"></datalist>
 
-  <!-- ==========================================
-       VISTA LOGIN
-       ========================================== -->
-  <div id="vista-login" class="pantalla-login">
+  <!-- ========================================== -->
+  <!-- PANTALLA DE LOGIN                          -->
+  <!-- ========================================== -->
+  <div id="vista-login" class="login-wrap">
     <div class="login-card">
-      <h1>Estructura 2027</h1>
-      <p class="subtitulo">Organización Territorial · Cunduacán, Tabasco</p>
-      <form id="form-login">
-        <div class="campo" style="margin-bottom: 14px;">
+      <div class="login-header">
+        <span class="login-badge">Cunduacán · 60 Secciones</span>
+        <h1>Estructura Territorial</h1>
+        <p>Sistema de Captura, Promoción y Pase de Lista</p>
+      </div>
+      <form id="form-login" class="login-form">
+        <div class="campo">
           <label for="login-usuario">Usuario</label>
           <input type="text" id="login-usuario" required autocomplete="username" placeholder="Ingresa tu usuario" />
         </div>
-        <div class="campo" style="margin-bottom: 18px;">
+        <div class="campo">
           <label for="login-password">Contraseña</label>
           <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••••" />
         </div>
-        <button type="submit" class="btn btn-morado" style="width: 100%; justify-content: center;">
-          Iniciar Sesión
-        </button>
-        <p id="login-error" style="color: var(--rojo); font-weight: 600; margin-top: 12px; font-size: 0.9rem;"></p>
+        <p id="login-error" class="texto-error"></p>
+        <button type="submit" class="btn btn-morado btn-bloque">Iniciar Sesión</button>
       </form>
     </div>
   </div>
 
-  <!-- MODAL CAMBIO OBLIGATORIO DE CONTRASEÑA -->
-  <div id="modal-password" class="modal-fondo oculto">
-    <div class="tarjeta" style="max-width: 390px; width: 100%;">
-      <h3 style="margin-top: 0; color: var(--morado-principal);">Actualizar Contraseña</h3>
-      <p style="font-size: 0.9rem; color: var(--texto-secundario);">
-        Por seguridad, establece una nueva contraseña personal antes de continuar.
-      </p>
+  <!-- ========================================== -->
+  <!-- MODAL CAMBIO OBLIGATORIO DE CONTRASEÑA     -->
+  <!-- ========================================== -->
+  <div id="modal-password" class="modal-overlay oculto">
+    <div class="modal-card">
+      <h3>Actualiza tu contraseña</h3>
+      <p>Por seguridad, establece una nueva contraseña personal antes de continuar.</p>
       <form id="form-cambiar-password">
-        <div class="campo" style="margin-bottom: 14px;">
-          <label for="nuevo-password">Nueva contraseña</label>
-          <input type="password" id="nuevo-password" minlength="4" required />
+        <div class="campo">
+          <label for="nuevo-password">Nueva Contraseña</label>
+          <input type="password" id="nuevo-password" required minlength="4" placeholder="Mínimo 4 caracteres" />
         </div>
-        <button type="submit" class="btn btn-morado" style="width: 100%; justify-content: center;">
-          Guardar y Continuar
-        </button>
+        <button type="submit" class="btn btn-morado btn-bloque">Guardar Contraseña</button>
       </form>
     </div>
   </div>
 
-  <!-- ==========================================
-       APLICACIÓN CON BARRA LATERAL PRINCIPAL
-       ========================================== -->
-  <div id="vista-app" class="layout-app oculto">
-    <div id="overlay-sidebar" class="overlay-sidebar" onclick="cerrarSidebarMovil()"></div>
+  <!-- ========================================== -->
+  <!-- APLICACIÓN PRINCIPAL CON BARRA LATERAL     -->
+  <!-- ========================================== -->
+  <div id="vista-app" class="app-layout oculto">
+    <div id="overlay-sidebar" class="sidebar-overlay" onclick="cerrarSidebarMovil()"></div>
 
-    <!-- BARRA LATERAL -->
     <aside id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <h1 class="sidebar-marca">CUNDUACÁN 2027</h1>
-        <span class="sidebar-sub">Control Territorial · 60 Secciones</span>
+      <div class="sidebar-brand">
+        <div class="brand-titulo">Cunduacán 2027</div>
+        <div class="brand-sub">Organización Territorial</div>
+      </div>
+
+      <div class="sidebar-user">
+        <div id="sidebar-nombre-usuario" class="user-name">admin</div>
+        <div id="sidebar-rol-usuario" class="user-role">admin</div>
       </div>
 
       <nav id="sidebar-menu" class="sidebar-menu">
         <button type="button" class="menu-item activo" data-vista="sec-avances" onclick="navegarA('sec-avances', 'Avances y Resumen General')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          Resumen y Avances
+          📊 Avances y Resumen General
         </button>
-
-        <button type="button" class="menu-item" data-vista="sec-simpatizantes" onclick="navegarA('sec-simpatizantes', 'Registro de Simpatizantes')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Simpatizantes
+        <button type="button" class="menu-item" data-vista="sec-avance-promotores" onclick="navegarA('sec-avance-promotores', 'Avance por Promotor')">
+          📈 Avance por Promotor
         </button>
-
-        <button type="button" class="menu-item" data-vista="sec-pase-lista" onclick="navegarA('sec-pase-lista', 'Pase de Lista y Asistencia')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Pase de Lista
+        <button type="button" class="menu-item" data-vista="sec-simpatizantes" onclick="navegarA('sec-simpatizantes', 'Simpatizantes')">
+          🤝 Simpatizantes
         </button>
-
-        <button type="button" class="menu-item" data-vista="sec-promotores" onclick="navegarA('sec-promotores', 'Red de Promotores')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-          Promotores
+        <button type="button" class="menu-item" data-vista="sec-pase-lista" onclick="navegarA('sec-pase-lista', 'Pase de Lista')">
+          ✅ Pase de Lista
         </button>
-
-        <button type="button" class="menu-item" data-vista="sec-estructura" onclick="navegarA('sec-estructura', 'Estructura Principal (20Z · 37R · 60S)')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-          Estructura Principal
+        <button type="button" class="menu-item" data-vista="sec-promotores" onclick="navegarA('sec-promotores', 'Promotores')">
+          📣 Promotores
         </button>
-
-        <button type="button" class="menu-item" id="menu-usuarios" data-vista="sec-usuarios" onclick="navegarA('sec-usuarios', 'Usuarios y Permisos')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          Usuarios / Equipo
+        <button type="button" class="menu-item" data-vista="sec-estructura" onclick="navegarA('sec-estructura', 'Estructura Principal')">
+          🏛️ Estructura Principal
+        </button>
+        <button type="button" id="menu-usuarios" class="menu-item" data-vista="sec-usuarios" onclick="navegarA('sec-usuarios', 'Usuarios / Equipo')">
+          🔐 Usuarios / Equipo
         </button>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="usuario-badge">
-          <strong id="sidebar-nombre-usuario">Usuario</strong>
-          <span id="sidebar-rol-usuario">Rol</span>
-        </div>
-        <button type="button" class="btn-salir" onclick="cerrarSesion()">Cerrar Sesión</button>
+        <button type="button" class="btn btn-gris btn-bloque" onclick="cerrarSesion()">Cerrar Sesión</button>
       </div>
     </aside>
 
-    <!-- CONTENIDO PRINCIPAL -->
-    <div class="contenido-principal">
+    <main class="main-content">
       <header class="topbar">
-        <div class="topbar-izq">
-          <button type="button" class="btn-hamburguesa" onclick="abrirSidebarMovil()">☰</button>
-          <h2 id="titulo-vista-actual">Avances y Resumen General</h2>
+        <button type="button" class="btn-hamburguesa no-print" onclick="abrirSidebarMovil()">☰</button>
+        <h2 id="titulo-vista-actual">Avances y Resumen General</h2>
+        <div class="topbar-actions no-print">
+          <button type="button" class="btn btn-sm btn-gris" onclick="window.print()">🖨️ Imprimir</button>
         </div>
-        <span class="pill-territorio">20 Zonas · 37 Rutas · 60 Secciones</span>
       </header>
 
-      <main class="workspace">
+      <!-- ====================================== -->
+      <!-- 1. AVANCES Y RESUMEN GENERAL           -->
+      <!-- ====================================== -->
+      <section id="sec-avances" class="vista-seccion">
+        <div class="grid-kpi">
+          <div class="kpi-card">
+            <span class="kpi-label">Total Registrados</span>
+            <strong id="kpi-registrados" class="kpi-valor">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Asistencias Confirmadas</span>
+            <strong id="kpi-asistieron" class="kpi-valor verde">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Porcentaje Asistencia</span>
+            <strong id="kpi-porcentaje" class="kpi-valor">0.0%</strong>
+            <div class="progreso-wrap"><div id="barra-asistencia-global" class="progreso-barra verde" style="width:0%;"></div></div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Promotores Activos</span>
+            <strong id="kpi-promotores" class="kpi-valor">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Secciones con Registro</span>
+            <strong id="kpi-secciones" class="kpi-valor">0 / 60</strong>
+            <div class="progreso-wrap"><div id="barra-secciones-activas" class="progreso-barra" style="width:0%;"></div></div>
+          </div>
+        </div>
 
-        <!-- ==========================================
-             1. RESUMEN Y AVANCES POR SECCIÓN
-             ========================================== -->
-        <section id="sec-avances" class="vista-seccion">
-          <div class="kpis-grid">
-            <div class="kpi-card">
-              <span class="kpi-titulo">Simpatizantes Registrados</span>
-              <strong class="kpi-valor" id="kpi-registrados">0</strong>
+        <div class="card">
+          <div class="card-header-flex">
+            <h3>Desglose por las 60 Secciones de Cunduacán</h3>
+            <button type="button" class="btn btn-sm btn-verde no-print" onclick="exportarExcelAvances()">📥 Exportar Excel</button>
+          </div>
+          <div class="filtros-bar no-print">
+            <input type="text" id="filtro-avances-seccion" placeholder="Filtrar sección (ej. 0615)..." oninput="renderizarAvances()" />
+            <select id="filtro-avances-estado" onchange="renderizarAvances()">
+              <option value="todas">Todas las secciones (60)</option>
+              <option value="con">Con registros</option>
+              <option value="sin">Sin registros</option>
+            </select>
+          </div>
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sección</th>
+                  <th>Coordinador de Sección</th>
+                  <th>Promotores</th>
+                  <th>Registrados</th>
+                  <th>Asistieron</th>
+                  <th>Pendientes</th>
+                  <th>% Asistencia</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-avances-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================== -->
+      <!-- 1B. AVANCE POR PROMOTOR (META = 15)    -->
+      <!-- ====================================== -->
+      <section id="sec-avance-promotores" class="vista-seccion oculto">
+        <div class="grid-kpi">
+          <div class="kpi-card">
+            <span class="kpi-label">Total Promotores</span>
+            <strong id="ap-kpi-total-promotores" class="kpi-valor">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Simpatizantes Vinculados</span>
+            <strong id="ap-kpi-total-referidos" class="kpi-valor">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Meta Cumplida (15+)</span>
+            <strong id="ap-kpi-cumplidos" class="kpi-valor verde">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Avance Global (Meta 15 c/u)</span>
+            <strong id="ap-kpi-porcentaje-global" class="kpi-valor">0.0%</strong>
+            <div class="progreso-wrap"><div id="ap-barra-global" class="progreso-barra verde" style="width:0%;"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <h3>Avance Individual por Promotor (100% = 15 Simpatizantes)</h3>
+              <p style="font-size:0.85rem; color:#6b7280; margin-top:4px;">Contabiliza los simpatizantes registrados con el nombre del promotor en el campo Referencia.</p>
             </div>
-            <div class="kpi-card verde">
-              <span class="kpi-titulo">Asistieron (Check-in)</span>
-              <strong class="kpi-valor" id="kpi-asistieron" style="color: var(--verde);">0</strong>
+            <button type="button" class="btn btn-sm btn-verde no-print" onclick="exportarExcelAvancePromotores()">📥 Exportar Excel</button>
+          </div>
+
+          <div class="filtros-bar no-print">
+            <input type="text" id="filtro-ap-seccion" placeholder="Sección (ej. 0615)..." oninput="renderizarAvancePromotores()" />
+            <input type="text" id="filtro-ap-busqueda" placeholder="Buscar promotor o localidad..." oninput="renderizarAvancePromotores()" />
+            <select id="filtro-ap-estado" onchange="renderizarAvancePromotores()">
+              <option value="todos">Todos los promotores</option>
+              <option value="cumplida">Meta cumplida (15 o más)</option>
+              <option value="proceso">En progreso (1 a 14)</option>
+              <option value="cero">Sin registros (0)</option>
+            </select>
+          </div>
+
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sección</th>
+                  <th>Promotor</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th>Simpatizantes</th>
+                  <th>Faltantes (Meta 15)</th>
+                  <th>Avance % (15 = 100%)</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-avance-promotores-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================== -->
+      <!-- 2. SIMPATIZANTES                       -->
+      <!-- ====================================== -->
+      <section id="sec-simpatizantes" class="vista-seccion oculto">
+        <div class="card no-print">
+          <div class="card-header-flex">
+            <h3 id="titulo-form-simp">Registrar Simpatizante</h3>
+            <button type="button" class="btn btn-morado" onclick="iniciarEscaneoINE('simpatizante')">
+              📷 Escanear Credencial INE
+            </button>
+          </div>
+
+          <div id="estado-ine-simpatizante" class="alerta-ine oculto"></div>
+
+          <form id="form-simpatizante" class="form-grid">
+            <input type="hidden" id="simp-id" />
+            <div class="campo">
+              <label for="simp-nombre">Nombre Completo *</label>
+              <input type="text" id="simp-nombre" required placeholder="Nombre y apellidos" />
             </div>
-            <div class="kpi-card vivo">
-              <span class="kpi-titulo">% Asistencia Global</span>
-              <strong class="kpi-valor" id="kpi-porcentaje">0%</strong>
-              <div class="progreso-wrap"><div id="barra-asistencia-global" class="progreso-barra verde" style="width: 0%;"></div></div>
+            <div class="campo">
+              <label for="simp-curp">CURP</label>
+              <input type="text" id="simp-curp" maxlength="18" placeholder="18 caracteres" style="text-transform:uppercase;" />
             </div>
-            <div class="kpi-card">
-              <span class="kpi-titulo">Promotores Activos</span>
-              <strong class="kpi-valor" id="kpi-promotores">0</strong>
+            <div class="campo">
+              <label for="simp-clave-elector">Clave de Elector</label>
+              <input type="text" id="simp-clave-elector" maxlength="18" placeholder="18 caracteres" style="text-transform:uppercase;" />
             </div>
-            <div class="kpi-card">
-              <span class="kpi-titulo">Secciones con Avance</span>
-              <strong class="kpi-valor" id="kpi-secciones">0 / 60</strong>
-              <div class="progreso-wrap"><div id="barra-secciones-activas" class="progreso-barra" style="width: 0%;"></div></div>
+            <div class="campo">
+              <label for="simp-telefono">Teléfono</label>
+              <input type="tel" id="simp-telefono" placeholder="10 dígitos" />
+            </div>
+            <div class="campo">
+              <label for="simp-seccion">Sección Electoral *</label>
+              <input type="text" id="simp-seccion" list="lista-secciones-cunduacan" required placeholder="Ej. 0615" />
+            </div>
+            <div class="campo">
+              <label for="simp-localidad">Localidad / Colonia</label>
+              <input type="text" id="simp-localidad" placeholder="Ranchería, poblado o colonia" />
+            </div>
+            <div class="campo">
+              <label for="simp-referencia">Promotor / Referencia</label>
+              <input type="text" id="simp-referencia" list="lista-promotores-registrados" placeholder="Nombre del promotor que lo invita" />
+            </div>
+            <div class="campo-acciones">
+              <button type="submit" class="btn btn-morado">Guardar Simpatizante</button>
+              <button type="button" id="btn-cancelar-simp" class="btn btn-gris oculto" onclick="resetFormSimpatizante()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header-flex">
+            <h3>Padrón de Simpatizantes (<span id="contador-simpatizantes">0</span>)</h3>
+            <div class="acciones-excel no-print">
+              <button type="button" class="btn btn-sm btn-gris" onclick="descargarPlantillaSimpatizantes()">📄 Plantilla</button>
+              <label class="btn btn-sm btn-morado" style="cursor:pointer;">
+                📤 Importar Excel
+                <input type="file" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelSimpatizantes(event)" />
+              </label>
+              <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelSimpatizantes()">📥 Exportar Excel</button>
             </div>
           </div>
 
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Detalle por Sección Electoral (60 Secciones de Cunduacán)</h3>
-              <div style="display: flex; flex-wrap: wrap; gap: 8px;" class="no-print">
-                <button type="button" class="btn btn-verde btn-sm" onclick="exportarExcelAvances()">Exportar Excel</button>
-                <button type="button" class="btn btn-suave btn-sm" onclick="window.print()">Imprimir / PDF</button>
-              </div>
-            </div>
-
-            <div class="barra-filtros no-print">
-              <div class="grupo-inputs-filtro">
-                <input type="text" id="filtro-avances-seccion" placeholder="Buscar sección (ej. 0615)..." oninput="renderizarAvances()" />
-                <select id="filtro-avances-estado" onchange="renderizarAvances()">
-                  <option value="todas">Todas las secciones (60)</option>
-                  <option value="con">Con registros</option>
-                  <option value="sin">Sin registros aún</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="tabla-resp">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Sección</th>
-                    <th>Coordinador Sección</th>
-                    <th>Promotores</th>
-                    <th>Registrados</th>
-                    <th>Asistieron</th>
-                    <th>Pendientes</th>
-                    <th style="min-width: 140px;">% Avance</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-avances-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ==========================================
-             2. SIMPATIZANTES
-             ========================================== -->
-        <section id="sec-simpatizantes" class="vista-seccion oculto">
-          <div class="tarjeta no-print" id="bloque-form-simpatizante">
-            <div class="tarjeta-header">
-              <h3 id="titulo-form-simp">Registrar Simpatizante</h3>
-              <button type="button" class="btn btn-ine" onclick="iniciarEscaneoINE('simpatizante')">
-                📷 Escanear Credencial INE
-              </button>
-            </div>
-
-            <div id="estado-ine-simpatizante" class="estado-ine oculto"></div>
-
-            <form id="form-simpatizante">
-              <input type="hidden" id="simp-id" />
-              <div class="grid-form">
-                <div class="campo">
-                  <label for="simp-nombre">Nombre Completo *</label>
-                  <input type="text" id="simp-nombre" required placeholder="EJ. JUAN PEREZ LOPEZ" />
-                </div>
-                <div class="campo">
-                  <label for="simp-telefono">Teléfono (10 dígitos)</label>
-                  <input type="tel" id="simp-telefono" placeholder="9141234567" />
-                </div>
-                <div class="campo">
-                  <label for="simp-seccion">Sección Electoral *</label>
-                  <input type="text" id="simp-seccion" list="lista-secciones-cunduacan" maxlength="4" required placeholder="0615" />
-                </div>
-                <div class="campo">
-                  <label for="simp-localidad">Localidad / Ranchería / Col.</label>
-                  <input type="text" id="simp-localidad" placeholder="EJ. R/A. HUIMANGO 1RA" />
-                </div>
-                <div class="campo">
-                  <label for="simp-referencia">Promotor / Referencia</label>
-                  <input type="text" id="simp-referencia" list="lista-promotores-registrados" placeholder="Selecciona o escribe promotor" />
-                </div>
-              </div>
-              <div class="acciones-form">
-                <button type="submit" class="btn btn-morado">Guardar Simpatizante</button>
-                <button type="button" id="btn-cancelar-simp" class="btn btn-gris oculto" onclick="resetFormSimpatizante()">Cancelar Edición</button>
-              </div>
-            </form>
+          <div class="filtros-bar no-print">
+            <input type="text" id="filtro-simp-seccion" placeholder="Sección..." oninput="renderizarSimpatizantes()" />
+            <input type="text" id="filtro-simp-busqueda" placeholder="Buscar nombre, CURP, clave elector, localidad..." oninput="renderizarSimpatizantes()" />
+            <select id="filtro-simp-asistencia" onchange="renderizarSimpatizantes()">
+              <option value="todos">Todos</option>
+              <option value="si">Asistieron</option>
+              <option value="no">Pendientes</option>
+            </select>
           </div>
 
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Padrón de Simpatizantes (<span id="contador-simpatizantes">0</span>)</h3>
-              <div class="no-print" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                <input type="file" id="input-excel-simp" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelSimpatizantes(event)" />
-                <button type="button" class="btn btn-suave btn-sm" onclick="descargarPlantillaSimpatizantes()">Plantilla Excel</button>
-                <button type="button" class="btn btn-gris btn-sm" onclick="document.getElementById('input-excel-simp').click()">Importar Excel</button>
-                <button type="button" class="btn btn-verde btn-sm" onclick="exportarExcelSimpatizantes()">Exportar Excel</button>
-                <button type="button" class="btn btn-suave btn-sm" onclick="window.print()">Imprimir / PDF</button>
-              </div>
-            </div>
-
-            <div class="barra-filtros no-print">
-              <div class="grupo-inputs-filtro">
-                <input type="text" id="filtro-simp-seccion" placeholder="Sección..." oninput="renderizarSimpatizantes()" style="width: 115px;" />
-                <input type="text" id="filtro-simp-busqueda" placeholder="Buscar nombre, localidad o promotor..." oninput="renderizarSimpatizantes()" style="width: 260px;" />
-                <select id="filtro-simp-asistencia" onchange="renderizarSimpatizantes()">
-                  <option value="todos">Todos los estados</option>
-                  <option value="si">Asistieron</option>
-                  <option value="no">Pendientes</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="tabla-resp">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Asistió</th>
-                    <th>Sección</th>
-                    <th>Nombre</th>
-                    <th>Teléfono</th>
-                    <th>Localidad</th>
-                    <th>Promotor / Ref.</th>
-                    <th class="no-print">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-simpatizantes-body"></tbody>
-              </table>
-            </div>
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asistió</th>
+                  <th>Sección</th>
+                  <th>Nombre</th>
+                  <th>CURP</th>
+                  <th>Clave de Elector</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th>Promotor / Ref.</th>
+                  <th class="no-print">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-simpatizantes-body"></tbody>
+            </table>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <!-- ==========================================
-             3. PASE DE LISTA RÁPIDO (CHECK-IN)
-             ========================================== -->
-        <section id="sec-pase-lista" class="vista-seccion oculto">
-          <div class="kpis-grid">
-            <div class="kpi-card">
-              <span class="kpi-titulo">En Lista (Filtro Actual)</span>
-              <strong class="kpi-valor" id="pl-total">0</strong>
+      <!-- ====================================== -->
+      <!-- 3. PASE DE LISTA                       -->
+      <!-- ====================================== -->
+      <section id="sec-pase-lista" class="vista-seccion oculto">
+        <div class="grid-kpi">
+          <div class="kpi-card">
+            <span class="kpi-label">En Lista</span>
+            <strong id="pl-total" class="kpi-valor">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Confirmados</span>
+            <strong id="pl-asistieron" class="kpi-valor verde">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Pendientes</span>
+            <strong id="pl-pendientes" class="kpi-valor">0</strong>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="filtros-bar no-print">
+            <input type="text" id="pl-filtro-seccion" placeholder="Sección..." oninput="renderizarPaseLista()" />
+            <input type="text" id="pl-filtro-nombre" placeholder="Buscar por nombre o localidad..." oninput="renderizarPaseLista()" />
+            <select id="pl-filtro-estado" onchange="renderizarPaseLista()">
+              <option value="todos">Todos</option>
+              <option value="no">Pendientes</option>
+              <option value="si">Confirmados</option>
+            </select>
+          </div>
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Estado</th>
+                  <th>Sección</th>
+                  <th>Nombre</th>
+                  <th>Localidad</th>
+                  <th>Promotor / Ref.</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-pase-lista-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================== -->
+      <!-- 4. PROMOTORES                          -->
+      <!-- ====================================== -->
+      <section id="sec-promotores" class="vista-seccion oculto">
+        <div class="card no-print">
+          <div class="card-header-flex">
+            <h3 id="titulo-form-prom">Registrar Promotor</h3>
+            <button type="button" class="btn btn-morado" onclick="iniciarEscaneoINE('promotor')">
+              📷 Escanear Credencial INE
+            </button>
+          </div>
+
+          <div id="estado-ine-promotor" class="alerta-ine oculto"></div>
+
+          <form id="form-promotor" class="form-grid">
+            <input type="hidden" id="prom-id" />
+            <div class="campo">
+              <label for="prom-nombre">Nombre Completo *</label>
+              <input type="text" id="prom-nombre" required placeholder="Nombre y apellidos" />
             </div>
-            <div class="kpi-card verde">
-              <span class="kpi-titulo">Asistieron</span>
-              <strong class="kpi-valor" id="pl-asistieron" style="color: var(--verde);">0</strong>
+            <div class="campo">
+              <label for="prom-telefono">Teléfono</label>
+              <input type="tel" id="prom-telefono" placeholder="10 dígitos" />
             </div>
-            <div class="kpi-card vivo">
-              <span class="kpi-titulo">Pendientes por Llegar</span>
-              <strong class="kpi-valor" id="pl-pendientes">0</strong>
+            <div class="campo">
+              <label for="prom-seccion">Sección Electoral *</label>
+              <input type="text" id="prom-seccion" list="lista-secciones-cunduacan" required placeholder="Ej. 0615" />
+            </div>
+            <div class="campo">
+              <label for="prom-localidad">Localidad / Colonia</label>
+              <input type="text" id="prom-localidad" placeholder="Ranchería, poblado o colonia" />
+            </div>
+            <div class="campo-acciones">
+              <button type="submit" class="btn btn-morado">Guardar Promotor</button>
+              <button type="button" id="btn-cancelar-prom" class="btn btn-gris oculto" onclick="resetFormPromotor()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header-flex">
+            <h3>Lista de Promotores (<span id="contador-promotores">0</span>)</h3>
+            <div class="acciones-excel no-print">
+              <label class="btn btn-sm btn-morado" style="cursor:pointer;">
+                📤 Importar Excel
+                <input type="file" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelPromotores(event)" />
+              </label>
+              <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelPromotores()">📥 Exportar Excel</button>
             </div>
           </div>
 
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Control Rápido de Asistencia</h3>
-            </div>
-            <div class="barra-filtros no-print">
-              <div class="grupo-inputs-filtro">
-                <input type="text" id="pl-filtro-seccion" placeholder="Sección (ej. 0615)" oninput="renderizarPaseLista()" style="width: 150px;" />
-                <input type="text" id="pl-filtro-nombre" placeholder="Buscar por nombre o localidad..." oninput="renderizarPaseLista()" style="width: 270px;" />
-                <select id="pl-filtro-estado" onchange="renderizarPaseLista()">
-                  <option value="todos">Todos</option>
-                  <option value="no">Solo Pendientes</option>
-                  <option value="si">Solo Asistieron</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="tabla-resp">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Estado</th>
-                    <th>Sección</th>
-                    <th>Nombre</th>
-                    <th>Localidad</th>
-                    <th>Promotor</th>
-                    <th>Marcar Asistencia</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-pase-lista-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ==========================================
-             4. PROMOTORES
-             ========================================== -->
-        <section id="sec-promotores" class="vista-seccion oculto">
-          <div class="tarjeta no-print">
-            <div class="tarjeta-header">
-              <h3 id="titulo-form-prom">Registrar Promotor</h3>
-              <button type="button" class="btn btn-ine" onclick="iniciarEscaneoINE('promotor')">
-                📷 Escanear Credencial INE
-              </button>
-            </div>
-
-            <div id="estado-ine-promotor" class="estado-ine oculto"></div>
-
-            <form id="form-promotor">
-              <input type="hidden" id="prom-id" />
-              <div class="grid-form">
-                <div class="campo">
-                  <label for="prom-nombre">Nombre Completo *</label>
-                  <input type="text" id="prom-nombre" required placeholder="EJ. MARIA GOMEZ RUIZ" />
-                </div>
-                <div class="campo">
-                  <label for="prom-telefono">Teléfono</label>
-                  <input type="tel" id="prom-telefono" placeholder="9141234567" />
-                </div>
-                <div class="campo">
-                  <label for="prom-seccion">Sección Electoral *</label>
-                  <input type="text" id="prom-seccion" list="lista-secciones-cunduacan" maxlength="4" required placeholder="0615" />
-                </div>
-                <div class="campo">
-                  <label for="prom-localidad">Localidad / Ranchería / Col.</label>
-                  <input type="text" id="prom-localidad" placeholder="EJ. POB. CUMUAPA" />
-                </div>
-              </div>
-              <div class="acciones-form">
-                <button type="submit" class="btn btn-morado">Guardar Promotor</button>
-                <button type="button" id="btn-cancelar-prom" class="btn btn-gris oculto" onclick="resetFormPromotor()">Cancelar Edición</button>
-              </div>
-            </form>
+          <div class="filtros-bar no-print">
+            <input type="text" id="filtro-prom-seccion" placeholder="Sección..." oninput="renderizarPromotores()" />
+            <input type="text" id="filtro-prom-busqueda" placeholder="Buscar promotor o localidad..." oninput="renderizarPromotores()" />
           </div>
 
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Promotores Registrados (<span id="contador-promotores">0</span>)</h3>
-              <div class="no-print" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                <input type="file" id="input-excel-prom" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelPromotores(event)" />
-                <button type="button" class="btn btn-gris btn-sm" onclick="document.getElementById('input-excel-prom').click()">Importar Excel</button>
-                <button type="button" class="btn btn-verde btn-sm" onclick="exportarExcelPromotores()">Exportar Excel</button>
-                <button type="button" class="btn btn-suave btn-sm" onclick="window.print()">Imprimir / PDF</button>
-              </div>
-            </div>
-
-            <div class="barra-filtros no-print">
-              <div class="grupo-inputs-filtro">
-                <input type="text" id="filtro-prom-seccion" placeholder="Sección..." oninput="renderizarPromotores()" style="width: 120px;" />
-                <input type="text" id="filtro-prom-busqueda" placeholder="Buscar promotor o localidad..." oninput="renderizarPromotores()" style="width: 250px;" />
-              </div>
-            </div>
-
-            <div class="tabla-resp">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Sección</th>
-                    <th>Nombre</th>
-                    <th>Teléfono</th>
-                    <th>Localidad</th>
-                    <th>Simpatizantes</th>
-                    <th class="no-print">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-promotores-body"></tbody>
-              </table>
-            </div>
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sección</th>
+                  <th>Nombre</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th>Simpatizantes</th>
+                  <th class="no-print">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-promotores-body"></tbody>
+            </table>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <!-- ==========================================
-             5. ESTRUCTURA PRINCIPAL (20 ZONAS, 37 RUTAS, 60 SECCIONES)
-             ========================================== -->
-        <section id="sec-estructura" class="vista-seccion oculto">
-          <div class="kpis-grid">
-            <div class="kpi-card">
-              <span class="kpi-titulo">Zonas Cubiertas</span>
-              <strong class="kpi-valor" id="est-kpi-zonas">0 / 20</strong>
-              <div class="progreso-wrap"><div id="est-barra-zonas" class="progreso-barra" style="width: 0%;"></div></div>
-            </div>
-            <div class="kpi-card vivo">
-              <span class="kpi-titulo">Rutas Cubiertas</span>
-              <strong class="kpi-valor" id="est-kpi-rutas">0 / 37</strong>
-              <div class="progreso-wrap"><div id="est-barra-rutas" class="progreso-barra" style="width: 0%;"></div></div>
-            </div>
-            <div class="kpi-card verde">
-              <span class="kpi-titulo">Secciones Cubiertas</span>
-              <strong class="kpi-valor" id="est-kpi-secciones">0 / 60</strong>
-              <div class="progreso-wrap"><div id="est-barra-secciones" class="progreso-barra verde" style="width: 0%;"></div></div>
-            </div>
+      <!-- ====================================== -->
+      <!-- 5. ESTRUCTURA PRINCIPAL                -->
+      <!-- ====================================== -->
+      <section id="sec-estructura" class="vista-seccion oculto">
+        <div class="grid-kpi">
+          <div class="kpi-card">
+            <span class="kpi-label">Zonas Cubiertas</span>
+            <strong id="est-kpi-zonas" class="kpi-valor">0 / 20</strong>
+            <div class="progreso-wrap"><div id="est-barra-zonas" class="progreso-barra" style="width:0%;"></div></div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Rutas Cubiertas</span>
+            <strong id="est-kpi-rutas" class="kpi-valor">0 / 37</strong>
+            <div class="progreso-wrap"><div id="est-barra-rutas" class="progreso-barra" style="width:0%;"></div></div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Secciones Cubiertas</span>
+            <strong id="est-kpi-secciones" class="kpi-valor">0 / 60</strong>
+            <div class="progreso-wrap"><div id="est-barra-secciones" class="progreso-barra verde" style="width:0%;"></div></div>
+          </div>
+        </div>
+
+        <div class="card no-print">
+          <div class="card-header-flex">
+            <h3 id="titulo-form-est">Registrar Integrante en Estructura Principal</h3>
+            <button type="button" class="btn btn-morado" onclick="iniciarEscaneoINE('estructura')">
+              📷 Escanear Credencial INE
+            </button>
           </div>
 
-          <div class="tarjeta no-print">
-            <div class="tarjeta-header">
-              <h3 id="titulo-form-est">Registrar Integrante en Estructura Principal</h3>
-              <button type="button" class="btn btn-ine" onclick="iniciarEscaneoINE('estructura')">
-                📷 Escanear Credencial INE
-              </button>
+          <div id="estado-ine-estructura" class="alerta-ine oculto"></div>
+
+          <form id="form-estructura" class="form-grid">
+            <input type="hidden" id="est-id" />
+            <div class="campo">
+              <label for="est-rol">Cargo en Estructura *</label>
+              <select id="est-rol" onchange="alCambiarRolEstructura()">
+                <option value="Coordinador de Zona">Coordinador de Zona</option>
+                <option value="Coordinador de Ruta">Coordinador de Ruta</option>
+                <option value="Coordinador de Sección">Coordinador de Sección</option>
+              </select>
             </div>
+            <div class="campo">
+              <label for="est-zona">Zona (1 - 20) *</label>
+              <select id="est-zona" required></select>
+            </div>
+            <div class="campo oculto" id="grupo-est-ruta">
+              <label for="est-ruta">Ruta (1 - 37) *</label>
+              <select id="est-ruta"></select>
+            </div>
+            <div class="campo">
+              <label for="est-nombres">Nombres *</label>
+              <input type="text" id="est-nombres" required />
+            </div>
+            <div class="campo">
+              <label for="est-apellidos">Apellidos *</label>
+              <input type="text" id="est-apellidos" required />
+            </div>
+            <div class="campo">
+              <label for="est-telefono">Teléfono</label>
+              <input type="tel" id="est-telefono" />
+            </div>
+            <div class="campo">
+              <label for="est-localidad">Localidad</label>
+              <input type="text" id="est-localidad" />
+            </div>
+            <div class="campo campo-completo">
+              <label>Secciones asignadas: <strong id="texto-secciones-seleccionadas">Ninguna</strong></label>
+              <div id="grid-secciones-estructura" class="grid-chips-secciones"></div>
+            </div>
+            <div class="campo-acciones">
+              <button type="submit" class="btn btn-morado">Guardar en Estructura</button>
+              <button type="button" id="btn-cancelar-est" class="btn btn-gris oculto" onclick="resetFormEstructura()">Cancelar</button>
+            </div>
+          </form>
+        </div>
 
-            <div id="estado-ine-estructura" class="estado-ine oculto"></div>
-
-            <form id="form-estructura">
-              <input type="hidden" id="est-id" />
-              <div class="grid-form">
-                <div class="campo">
-                  <label for="est-rol">Cargo Territorial *</label>
-                  <select id="est-rol" onchange="alCambiarRolEstructura()" required>
-                    <option value="Coordinador de Zona">Coordinador de Zona</option>
-                    <option value="Coordinador de Ruta">Coordinador de Ruta</option>
-                    <option value="Coordinador de Sección">Coordinador de Sección</option>
-                  </select>
-                </div>
-                <div class="campo">
-                  <label for="est-zona">Zona (1 a 20) *</label>
-                  <select id="est-zona" required></select>
-                </div>
-                <div class="campo oculto" id="grupo-est-ruta">
-                  <label for="est-ruta">Ruta (1 a 37) *</label>
-                  <select id="est-ruta"></select>
-                </div>
-                <div class="campo">
-                  <label for="est-nombres">Nombre(s) *</label>
-                  <input type="text" id="est-nombres" required placeholder="EJ. CARLOS ALBERTO" />
-                </div>
-                <div class="campo">
-                  <label for="est-apellidos">Apellidos *</label>
-                  <input type="text" id="est-apellidos" required placeholder="EJ. HERNANDEZ DIAZ" />
-                </div>
-                <div class="campo">
-                  <label for="est-telefono">Teléfono</label>
-                  <input type="tel" id="est-telefono" placeholder="9141234567" />
-                </div>
-                <div class="campo">
-                  <label for="est-localidad">Localidad</label>
-                  <input type="text" id="est-localidad" placeholder="EJ. COL. CENTRO" />
-                </div>
-              </div>
-
-              <div class="campo" style="margin-top: 14px;">
-                <label>Selecciona las Secciones Asignadas (60 de Cunduacán) *</label>
-                <div id="grid-secciones-estructura" class="selector-secciones-grid"></div>
-                <small style="color: var(--texto-secundario);">
-                  Seleccionadas: <strong id="texto-secciones-seleccionadas">Ninguna</strong>
-                </small>
-              </div>
-
-              <div class="acciones-form">
-                <button type="submit" class="btn btn-morado">Guardar en Estructura</button>
-                <button type="button" id="btn-cancelar-est" class="btn btn-gris oculto" onclick="resetFormEstructura()">Cancelar Edición</button>
-              </div>
-            </form>
+        <div class="card">
+          <div class="card-header-flex">
+            <h3>Integrantes Registrados (<span id="contador-estructura">0</span>)</h3>
+            <button type="button" class="btn btn-sm btn-verde no-print" onclick="exportarExcelEstructura()">📥 Exportar Excel</button>
           </div>
-
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Integrantes de la Estructura (<span id="contador-estructura">0</span>)</h3>
-              <div class="no-print" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                <button type="button" class="btn btn-verde btn-sm" onclick="exportarExcelEstructura()">Exportar Excel</button>
-                <button type="button" class="btn btn-suave btn-sm" onclick="window.print()">Imprimir / PDF</button>
-              </div>
-            </div>
-
-            <div class="barra-filtros no-print">
-              <div class="grupo-inputs-filtro">
-                <select id="filtro-est-zona" onchange="renderizarEstructura()">
-                  <option value="">Todas las Zonas (1-20)</option>
-                </select>
-                <select id="filtro-est-rol" onchange="renderizarEstructura()">
-                  <option value="">Todos los Cargos</option>
-                  <option value="Coordinador de Zona">Coordinador de Zona</option>
-                  <option value="Coordinador de Ruta">Coordinador de Ruta</option>
-                  <option value="Coordinador de Sección">Coordinador de Sección</option>
-                </select>
-                <input type="text" id="filtro-est-busqueda" placeholder="Buscar nombre o sección..." oninput="renderizarEstructura()" />
-              </div>
-            </div>
-
-            <div class="tabla-resp">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Zona</th>
-                    <th>Ruta</th>
-                    <th>Cargo</th>
-                    <th>Secciones</th>
-                    <th>Nombre Completo</th>
-                    <th>Teléfono</th>
-                    <th>Localidad</th>
-                    <th class="no-print">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-estructura-body"></tbody>
-              </table>
-            </div>
+          <div class="filtros-bar no-print">
+            <select id="filtro-est-zona" onchange="renderizarEstructura()">
+              <option value="">Todas las Zonas</option>
+            </select>
+            <select id="filtro-est-rol" onchange="renderizarEstructura()">
+              <option value="">Todos los Cargos</option>
+              <option value="Coordinador de Zona">Coordinador de Zona</option>
+              <option value="Coordinador de Ruta">Coordinador de Ruta</option>
+              <option value="Coordinador de Sección">Coordinador de Sección</option>
+            </select>
+            <input type="text" id="filtro-est-busqueda" placeholder="Buscar nombre, sección o localidad..." oninput="renderizarEstructura()" />
           </div>
-        </section>
-
-        <!-- ==========================================
-             6. USUARIOS / EQUIPO (SOLO ADMIN)
-             ========================================== -->
-        <section id="sec-usuarios" class="vista-seccion oculto">
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Crear Nuevo Usuario de Equipo</h3>
-            </div>
-            <form id="form-usuario">
-              <div class="grid-form">
-                <div class="campo">
-                  <label for="usu-nombre">Nombre de Usuario *</label>
-                  <input type="text" id="usu-nombre" required placeholder="ej. capturista1" />
-                </div>
-                <div class="campo">
-                  <label for="usu-password">Contraseña Inicial *</label>
-                  <input type="text" id="usu-password" required placeholder="Clave temporal" />
-                </div>
-                <div class="campo">
-                  <label for="usu-rol">Rol / Nivel de Acceso *</label>
-                  <select id="usu-rol" onchange="toggleCampoSeccionUsuario()">
-                    <option value="capturista">Capturista (Registro General)</option>
-                    <option value="pase_lista">Pase de Lista (Solo su Sección)</option>
-                    <option value="admin">Administrador Total</option>
-                  </select>
-                </div>
-                <div class="campo oculto" id="grupo-usu-seccion">
-                  <label for="usu-seccion">Sección Asignada *</label>
-                  <input type="text" id="usu-seccion" list="lista-secciones-cunduacan" maxlength="4" placeholder="0615" />
-                </div>
-              </div>
-              <div class="acciones-form">
-                <button type="submit" class="btn btn-morado">Crear Usuario</button>
-              </div>
-            </form>
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Zona</th>
+                  <th>Ruta</th>
+                  <th>Cargo</th>
+                  <th>Secciones</th>
+                  <th>Nombre Completo</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th class="no-print">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-estructura-body"></tbody>
+            </table>
           </div>
+        </div>
+      </section>
 
-          <div class="tarjeta">
-            <div class="tarjeta-header">
-              <h3>Usuarios Activos</h3>
+      <!-- ====================================== -->
+      <!-- 6. USUARIOS / EQUIPO (SOLO ADMIN)      -->
+      <!-- ====================================== -->
+      <section id="sec-usuarios" class="vista-seccion oculto">
+        <div class="card">
+          <h3>Crear Usuario del Sistema</h3>
+          <form id="form-usuario" class="form-grid">
+            <div class="campo">
+              <label for="usu-nombre">Usuario *</label>
+              <input type="text" id="usu-nombre" required />
             </div>
-            <div class="tabla-resp">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Usuario</th>
-                    <th>Contraseña</th>
-                    <th>Rol</th>
-                    <th>Sección</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-usuarios-body"></tbody>
-              </table>
+            <div class="campo">
+              <label for="usu-password">Contraseña Temporal *</label>
+              <input type="text" id="usu-password" required />
             </div>
+            <div class="campo">
+              <label for="usu-rol">Rol *</label>
+              <select id="usu-rol" onchange="toggleCampoSeccionUsuario()">
+                <option value="capturista">Capturista</option>
+                <option value="pase_lista">Pase de Lista (por sección)</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+            <div class="campo oculto" id="grupo-usu-seccion">
+              <label for="usu-seccion">Sección Asignada *</label>
+              <input type="text" id="usu-seccion" list="lista-secciones-cunduacan" placeholder="Ej. 0615" />
+            </div>
+            <div class="campo-acciones">
+              <button type="submit" class="btn btn-morado">Crear Usuario</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h3>Usuarios Activos</h3>
+          <div class="tabla-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Contraseña</th>
+                  <th>Rol</th>
+                  <th>Sección Asignada</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-usuarios-body"></tbody>
+            </table>
           </div>
-        </section>
-
-      </main>
-    </div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script src="app.js"></script>

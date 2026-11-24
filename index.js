@@ -8,12 +8,10 @@ const { GoogleGenAI, Type } = require('@google/genai');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Límite ampliado para recibir fotos de credenciales INE en Base64
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Conexión a PostgreSQL (Render / Local)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
@@ -24,7 +22,6 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000
 });
 
-// Reutilizar una sola instancia del cliente de Google AI para ahorrar tiempo en cada petición
 let clienteAI = null;
 function obtenerClienteAI() {
   if (!clienteAI && process.env.GEMINI_API_KEY) {
@@ -42,6 +39,10 @@ const SECCIONES_CUNDUACAN = new Set([
 
 function normalizarTexto(txt) {
   return String(txt || '').trim().toUpperCase();
+}
+
+function normalizarCodigoINE(txt) {
+  return String(txt || '').replace(/\s+/g, '').trim().toUpperCase();
 }
 
 function normalizarSeccion(sec) {
@@ -62,7 +63,6 @@ async function generarRapidoConReintentos(ai, solicitud, maxIntentos = 3) {
       ultimoError = error;
       const textoErr = String(error?.message || '');
 
-      // Si el modelo no admite thinkingBudget: 0, reintenta de inmediato sin esa opción
       if (solicitud.config?.thinkingConfig && (error?.status === 400 || textoErr.includes('thinking'))) {
         const copiaConfig = { ...solicitud.config };
         delete copiaConfig.thinkingConfig;
@@ -88,7 +88,7 @@ async function generarRapidoConReintentos(ai, solicitud, maxIntentos = 3) {
 }
 
 // ==========================================
-// INICIALIZACIÓN DE TABLAS EN POSTGRESQL
+// INICIALIZACIÓN Y MIGRACIÓN SEGURA DE TABLAS
 // ==========================================
 async function inicializarBD() {
   await pool.query(`
@@ -104,6 +104,8 @@ async function inicializarBD() {
     CREATE TABLE IF NOT EXISTS simpatizantes (
       id SERIAL PRIMARY KEY,
       nombre VARCHAR(200) NOT NULL,
+      curp VARCHAR(30),
+      clave_elector VARCHAR(30),
       telefono VARCHAR(30),
       seccion VARCHAR(10) NOT NULL,
       localidad VARCHAR(200),
@@ -111,6 +113,9 @@ async function inicializarBD() {
       asistio BOOLEAN DEFAULT FALSE,
       creado_en TIMESTAMP DEFAULT NOW()
     );
+
+    ALTER TABLE simpatizantes ADD COLUMN IF NOT EXISTS curp VARCHAR(30);
+    ALTER TABLE simpatizantes ADD COLUMN IF NOT EXISTS clave_elector VARCHAR(30);
 
     CREATE TABLE IF NOT EXISTS promotores (
       id SERIAL PRIMARY KEY,
@@ -164,8 +169,10 @@ app.post('/api/ine/escanear', async (req, res) => {
     const base64Limpio = imagenBase64.replace(/^data:image\/\w+;base64,/, '');
 
     const prompt =
-      'Lee esta credencial INE/IFE de México (original o copia). Devuelve JSON: ' +
+      'Lee esta credencial INE/IFE de México (original o copia). Devuelve JSON exacto: ' +
       'es_ine_valida (boolean), apellidos (mayúsculas sin acentos), nombres (mayúsculas sin acentos), ' +
+      'curp (18 caracteres alfanuméricos en mayúsculas sin espacios), ' +
+      'clave_elector (18 caracteres alfanuméricos en mayúsculas sin espacios), ' +
       'seccion (4 dígitos), localidad (colonia, ranchería o poblado sin CP ni municipio).';
 
     const response = await generarRapidoConReintentos(ai, {
@@ -194,10 +201,12 @@ app.post('/api/ine/escanear', async (req, res) => {
             es_ine_valida: { type: Type.BOOLEAN },
             apellidos: { type: Type.STRING },
             nombres: { type: Type.STRING },
+            curp: { type: Type.STRING },
+            clave_elector: { type: Type.STRING },
             seccion: { type: Type.STRING },
             localidad: { type: Type.STRING }
           },
-          required: ['es_ine_valida', 'apellidos', 'nombres', 'seccion', 'localidad']
+          required: ['es_ine_valida', 'apellidos', 'nombres', 'curp', 'clave_elector', 'seccion', 'localidad']
         }
       }
     });
@@ -219,6 +228,8 @@ app.post('/api/ine/escanear', async (req, res) => {
         es_ine_valida: true,
         nombres: normalizarTexto(datos.nombres),
         apellidos: normalizarTexto(datos.apellidos),
+        curp: normalizarCodigoINE(datos.curp),
+        clave_elector: normalizarCodigoINE(datos.clave_elector),
         seccion: seccionNorm,
         localidad: normalizarTexto(datos.localidad),
         es_seccion_cunduacan: esSeccionCunduacan
@@ -362,11 +373,13 @@ app.get('/api/simpatizantes/:seccion', async (req, res) => {
 
 app.post('/api/simpatizantes', async (req, res) => {
   try {
-    const { nombre, telefono, seccion, localidad, referencia } = req.body;
+    const { nombre, curp, clave_elector, telefono, seccion, localidad, referencia } = req.body;
     await pool.query(
-      'INSERT INTO simpatizantes (nombre, telefono, seccion, localidad, referencia) VALUES ($1, $2, $3, $4, $5)',
+      'INSERT INTO simpatizantes (nombre, curp, clave_elector, telefono, seccion, localidad, referencia) VALUES ($1, $2, $3, $4, $5, $6, $7)',
       [
         normalizarTexto(nombre),
+        normalizarCodigoINE(curp),
+        normalizarCodigoINE(clave_elector),
         String(telefono || '').trim(),
         normalizarSeccion(seccion),
         normalizarTexto(localidad),
@@ -382,11 +395,13 @@ app.post('/api/simpatizantes', async (req, res) => {
 
 app.patch('/api/simpatizantes/:id/editar', async (req, res) => {
   try {
-    const { nombre, telefono, seccion, localidad, referencia } = req.body;
+    const { nombre, curp, clave_elector, telefono, seccion, localidad, referencia } = req.body;
     await pool.query(
-      'UPDATE simpatizantes SET nombre = $1, telefono = $2, seccion = $3, localidad = $4, referencia = $5 WHERE id = $6',
+      'UPDATE simpatizantes SET nombre = $1, curp = $2, clave_elector = $3, telefono = $4, seccion = $5, localidad = $6, referencia = $7 WHERE id = $8',
       [
         normalizarTexto(nombre),
+        normalizarCodigoINE(curp),
+        normalizarCodigoINE(clave_elector),
         String(telefono || '').trim(),
         normalizarSeccion(seccion),
         normalizarTexto(localidad),
@@ -429,9 +444,11 @@ app.post('/api/simpatizantes/importar', async (req, res) => {
     for (const r of registros) {
       if (!r.nombre || !r.seccion) continue;
       await pool.query(
-        'INSERT INTO simpatizantes (nombre, telefono, seccion, localidad, referencia, asistio) VALUES ($1, $2, $3, $4, $5, $6)',
+        'INSERT INTO simpatizantes (nombre, curp, clave_elector, telefono, seccion, localidad, referencia, asistio) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
         [
           normalizarTexto(r.nombre),
+          normalizarCodigoINE(r.curp),
+          normalizarCodigoINE(r.clave_elector),
           String(r.telefono || '').trim(),
           normalizarSeccion(r.seccion),
           normalizarTexto(r.localidad),
@@ -612,7 +629,6 @@ app.delete('/api/estructura/:id', async (req, res) => {
   }
 });
 
-// Ruta fallback compatible con Express 4 y 5
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
