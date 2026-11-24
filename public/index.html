@@ -1,844 +1,558 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Sistema Electoral y Simpatizantes</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Librerías para Excel y PDF -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estructura Territorial 2027 - Cunduacán</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Librería SheetJS para importar y exportar Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <!-- Librerías para Escáner INE (OCR + Lector QR) -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    :root {
+      --primario: #7c1d32;
+      --primario-oscuro: #5a1323;
+      --acento: #b45309;
+      --fondo: #f4f6f9;
+      --tarjeta: #ffffff;
+      --texto: #1f2937;
+      --borde: #d1d5db;
+      --verde: #15803d;
+      --rojo: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--fondo);
+      color: var(--texto);
+    }
+    .oculto { display: none !important; }
+    .contenedor { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .tarjeta {
+      background: var(--tarjeta);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 18px;
+    }
+    header.barra-superior {
+      background: var(--primario);
+      color: #fff;
+      padding: 14px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    header.barra-superior h1 { margin: 0; font-size: 1.2rem; }
+    .nav-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .nav-tabs button {
+      background: #e5e7eb;
+      color: var(--texto);
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .nav-tabs button.activo {
+      background: var(--primario);
+      color: #fff;
+    }
+    .grid-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+    .campo { display: flex; flex-direction: column; gap: 4px; }
+    .campo label { font-size: 0.85rem; font-weight: 600; }
+    .campo input, .campo select {
+      padding: 9px 10px;
+      border: 1px solid var(--borde);
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .acciones-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+      align-items: center;
+    }
+    .btn {
+      border: none;
+      padding: 10px 16px;
+      border-radius: 7px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.92rem;
+    }
+    .btn-primario { background: var(--primario); color: #fff; }
+    .btn-primario:hover { background: var(--primario-oscuro); }
+    .btn-ine {
+      background: #0f766e;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-ine:hover { background: #115e59; }
+    .btn-secundario { background: #4b5563; color: #fff; }
+    .btn-verde { background: var(--verde); color: #fff; }
+    .btn-rojo { background: var(--rojo); color: #fff; padding: 6px 10px; font-size: 0.82rem; }
+    .btn-editar { background: #2563eb; color: #fff; padding: 6px 10px; font-size: 0.82rem; }
+    .estado-ine {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: #f8fafc;
+      border-left: 4px solid #0f766e;
+    }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 14px;
+      border-left: 4px solid var(--primario);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .kpi-card span { font-size: 0.82rem; color: #6b7280; }
+    .kpi-card strong { display: block; font-size: 1.5rem; margin-top: 4px; }
+    .tabla-resp { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+    }
+    th { background: #f9fafb; font-weight: 700; }
+    .login-box {
+      max-width: 400px;
+      margin: 70px auto;
+      background: #fff;
+      padding: 26px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    .modal-fondo {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+  </style>
 </head>
 <body>
 
-  <!-- BARRA DE NAVEGACIÓN -->
-  <nav id="navbar" style="display: none;">
-    <div class="nav-content">
-      <h2 id="navTitle">Sistema Electoral</h2>
-      <button onclick="cerrarSesion()" class="btn-secondary">Cerrar Sesión</button>
-    </div>
-  </nav>
+  <!-- Input único oculto para abrir cámara trasera en celular o elegir foto en PC -->
+  <input type="file" id="input-foto-ine" accept="image/*" capture="environment" class="oculto" />
 
-  <div class="container">
+  <!-- Catálogo de las 60 secciones de Cunduacán -->
+  <datalist id="lista-secciones-cunduacan"></datalist>
 
-    <!-- VISTA 1: LOGIN -->
-    <div id="vista-login" class="card form-centered">
-      <h2>Iniciar Sesión</h2>
-      <form id="formLogin">
-        <div class="form-group"><label>Usuario:</label><input type="text" id="loginUsuario" required></div>
-        <div class="form-group"><label>Contraseña:</label><input type="password" id="loginPassword" required></div>
-        <button type="submit" class="btn-primary">Entrar</button>
+  <!-- VISTA LOGIN -->
+  <div id="vista-login" class="login-box">
+    <h2 style="margin-top:0; color:var(--primario);">Acceso Territorial Cunduacán</h2>
+    <form id="form-login">
+      <div class="campo" style="margin-bottom:12px;">
+        <label for="login-usuario">Usuario</label>
+        <input type="text" id="login-usuario" required autocomplete="username" />
+      </div>
+      <div class="campo" style="margin-bottom:16px;">
+        <label for="login-password">Contraseña</label>
+        <input type="password" id="login-password" required autocomplete="current-password" />
+      </div>
+      <button type="submit" class="btn btn-primario" style="width:100%;">Ingresar</button>
+      <p id="login-error" style="color:var(--rojo); font-weight:600; margin-top:10px;"></p>
+    </form>
+  </div>
+
+  <!-- MODAL CAMBIO OBLIGATORIO DE CONTRASEÑA -->
+  <div id="modal-password" class="modal-fondo oculto">
+    <div class="tarjeta" style="max-width:380px; width:100%;">
+      <h3 style="margin-top:0;">Actualiza tu contraseña</h3>
+      <p style="font-size:0.9rem;">Por seguridad, cambia tu contraseña inicial antes de continuar.</p>
+      <form id="form-cambiar-password">
+        <div class="campo" style="margin-bottom:14px;">
+          <label for="nuevo-password">Nueva contraseña</label>
+          <input type="password" id="nuevo-password" minlength="4" required />
+        </div>
+        <button type="submit" class="btn btn-primario" style="width:100%;">Guardar contraseña</button>
       </form>
-      <div id="loginError" class="alert-error" style="display:none; margin-top:10px;"></div>
     </div>
+  </div>
 
-    <!-- VISTA CAMBIO DE CONTRASEÑA OBLIGATORIO -->
-    <div id="vista-cambio-password" style="display: none;" class="card form-centered">
-      <h2>Actualizar Contraseña</h2>
-      <p style="color: #4b5563; font-size: 0.9rem; margin-bottom: 15px;">Por seguridad, debes cambiar tu contraseña temporal antes de entrar.</p>
-      <form id="formCambioPassword">
-        <div class="form-group"><label>Nueva Contraseña:</label><input type="password" id="passNueva1" required minlength="4"></div>
-        <div class="form-group"><label>Confirmar Nueva Contraseña:</label><input type="password" id="passNueva2" required minlength="4"></div>
-        <button type="submit" class="btn-primary">Guardar y Continuar</button>
-      </form>
-      <div id="cambioPassError" class="alert-error" style="display:none; margin-top:10px;"></div>
-    </div>
+  <!-- VISTA PRINCIPAL DE LA APLICACIÓN -->
+  <div id="vista-app" class="oculto">
+    <header class="barra-superior">
+      <h1>Organización Territorial 2027 - Cunduacán</h1>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span id="info-usuario-activo" style="font-size:0.9rem;"></span>
+        <button type="button" class="btn btn-secundario" onclick="cerrarSesion()">Salir</button>
+      </div>
+    </header>
 
-    <!-- VISTA 2: PANEL DE ADMINISTRADOR / COORDINADOR -->
-    <div id="vista-admin" style="display: none;">
-      <div class="admin-layout">
-        
-        <!-- BARRA LATERAL -->
-        <aside class="sidebar">
-          <h3>Menú Principal</h3>
-          <ul class="sidebar-nav">
-            <li><button onclick="mostrarSeccionAdmin('admin-estructura')" class="nav-btn" id="btn-admin-estructura">🏛️ Estructura Principal</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-captura')" class="nav-btn" id="btn-admin-captura">✍️ Capturar Simpatizante</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-captura-promotor')" class="nav-btn" id="btn-admin-captura-promotor">👔 Capturar Promotor</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-resumen-promotor')" class="nav-btn" id="btn-admin-resumen-promotor">📊 Resumen por Promotor</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-pase-lista-global')" class="nav-btn" id="btn-admin-pase-lista-global">✅ Pase de Lista (Todas)</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-staff')" class="nav-btn active" id="btn-admin-staff">👥 Captura de Staff</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-resumen')" class="nav-btn" id="btn-admin-resumen">📊 Resumen Numérico</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-grafica')" class="nav-btn" id="btn-admin-grafica">📉 Gráfica de Avance</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-lista')" class="nav-btn" id="btn-admin-lista">📋 Lista General</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-gestion-simp')" class="nav-btn" id="btn-admin-gestion-simp">📝 Editar Simpatizantes</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-gestion-promotores')" class="nav-btn" id="btn-admin-gestion-promotores">👔 Editar Promotores</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-gestion-staff')" class="nav-btn" id="btn-admin-gestion-staff">⚙️ Editar Staff</button></li>
-            <li><button onclick="mostrarSeccionAdmin('admin-exportar-importar')" class="nav-btn" id="btn-admin-exportar-importar">💾 Exportar / Importar BD</button></li>
-          </ul>
-          <button onclick="cargarAvancesAdmin()" id="btn-admin-actualizar" class="btn-secondary" style="width: 100%; margin-top: 20px;">🔄 Actualizar Datos</button>
-        </aside>
+    <div class="contenedor">
+      <!-- NAVEGACIÓN POR PESTAÑAS -->
+      <nav id="nav-tabs" class="nav-tabs">
+        <button type="button" data-tab="tab-avances" class="activo" onclick="cambiarPestana('tab-avances')">Avances por Sección</button>
+        <button type="button" data-tab="tab-simpatizantes" onclick="cambiarPestana('tab-simpatizantes')">Simpatizantes / Pase de Lista</button>
+        <button type="button" data-tab="tab-promotores" onclick="cambiarPestana('tab-promotores')">Promotores</button>
+        <button type="button" data-tab="tab-estructura" onclick="cambiarPestana('tab-estructura')">Estructura Principal</button>
+        <button type="button" data-tab="tab-usuarios" id="btn-tab-usuarios" onclick="cambiarPestana('tab-usuarios')">Usuarios</button>
+      </nav>
 
-        <!-- CONTENIDO PRINCIPAL -->
-        <main class="admin-content">
+      <!-- ========================================== -->
+      <!-- PESTAÑA 1: AVANCES POR SECCIÓN             -->
+      <!-- ========================================== -->
+      <section id="tab-avances" class="panel-tab">
+        <div class="kpis">
+          <div class="kpi-card">
+            <span>Total Registrados</span>
+            <strong id="kpi-registrados">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span>Total Asistieron</span>
+            <strong id="kpi-asistieron">0</strong>
+          </div>
+          <div class="kpi-card">
+            <span>% Asistencia Global</span>
+            <strong id="kpi-porcentaje">0%</strong>
+          </div>
+          <div class="kpi-card">
+            <span>Secciones con Registro</span>
+            <strong id="kpi-secciones">0 / 60</strong>
+          </div>
+        </div>
 
-          <!-- 0. ESTRUCTURA PRINCIPAL (20 ZONAS, 37 RUTAS, 60 SECCIONES) -->
-          <section id="admin-estructura" class="card admin-seccion" style="display: none;">
-            <h2>🏛️ Estructura Principal (Cunduacán)</h2>
-            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 16px;">
-              <strong>20 Zonas</strong>, <strong>37 Rutas</strong> y <strong>60 Secciones Electorales</strong> (0609–0653, 0655–0667, 1202 y 1203). Coordinadores de Zona y de Ruta pueden tener 1 o más secciones; el Jefe de Sección tiene 1 sección asignada.
-            </p>
+        <div class="tarjeta">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <h3 style="margin:0;">Avance en las 60 Secciones de Cunduacán</h3>
+            <input type="text" id="filtro-avances-seccion" placeholder="Filtrar sección (ej. 0615)..." oninput="renderizarAvances()" style="padding:8px; border:1px solid var(--borde); border-radius:6px;" />
+          </div>
+          <div class="tabla-resp">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sección</th>
+                  <th>Registrados</th>
+                  <th>Asistieron</th>
+                  <th>Porcentaje</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-avances-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-            <!-- TARJETAS DE CONTEO Y AVANCE DE ESTRUCTURA -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
-              <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.8rem; font-weight: 600; color: #1e40af;">COORDINADORES DE ZONA</div>
-                <div id="contadorEstZonas" style="font-size: 1.4rem; font-weight: 700; color: #1d4ed8; margin-top: 4px;">0 / 20</div>
+      <!-- ========================================== -->
+      <!-- PESTAÑA 2: SIMPATIZANTES Y PASE DE LISTA   -->
+      <!-- ========================================== -->
+      <section id="tab-simpatizantes" class="panel-tab oculto">
+        <div class="tarjeta" id="bloque-form-simpatizante">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <h3 id="titulo-form-simp" style="margin:0;">Registrar Simpatizante</h3>
+            <button type="button" class="btn btn-ine" onclick="iniciarEscaneoINE('simpatizante')">
+              📷 Escanear Credencial INE
+            </button>
+          </div>
+
+          <div id="estado-ine-simpatizante" class="estado-ine oculto"></div>
+
+          <form id="form-simpatizante">
+            <input type="hidden" id="simp-id" />
+            <div class="grid-form">
+              <div class="campo">
+                <label for="simp-nombre">Nombre Completo *</label>
+                <input type="text" id="simp-nombre" required placeholder="EJ. JUAN PEREZ LOPEZ" />
               </div>
-              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.8rem; font-weight: 600; color: #166534;">COORDINADORES DE RUTA</div>
-                <div id="contadorEstRutas" style="font-size: 1.4rem; font-weight: 700; color: #15803d; margin-top: 4px;">0 / 37</div>
+              <div class="campo">
+                <label for="simp-telefono">Teléfono</label>
+                <input type="tel" id="simp-telefono" placeholder="10 dígitos" />
               </div>
-              <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.8rem; font-weight: 600; color: #854d0e;">JEFES DE SECCIÓN</div>
-                <div id="contadorEstSecciones" style="font-size: 1.4rem; font-weight: 700; color: #a16207; margin-top: 4px;">0 / 60</div>
+              <div class="campo">
+                <label for="simp-seccion">Sección (4 dígitos) *</label>
+                <input type="text" id="simp-seccion" list="lista-secciones-cunduacan" maxlength="4" required placeholder="0615" />
               </div>
-              <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">TOTAL ESTRUCTURA</div>
-                <div id="contadorEstTotal" style="font-size: 1.4rem; font-weight: 700; color: #0f172a; margin-top: 4px;">0 / 117</div>
+              <div class="campo">
+                <label for="simp-localidad">Localidad / Ranchería / Col.</label>
+                <input type="text" id="simp-localidad" placeholder="EJ. R/A. HUIMANGO 1RA" />
+              </div>
+              <div class="campo">
+                <label for="simp-referencia">Referencia / Promotor</label>
+                <input type="text" id="simp-referencia" placeholder="Quién lo invita" />
               </div>
             </div>
-
-            <!-- FORMULARIO DE CAPTURA EN ESTRUCTURA PRINCIPAL -->
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-              <h3 style="margin-bottom: 12px; color: #1e293b;">➕ Agregar Integrante a la Estructura</h3>
-              <form id="formEstructuraPrincipal">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
-                  
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label>Rol en la Estructura:</label>
-                    <select id="estRol" onchange="actualizarCamposEstructura()" required>
-                      <option value="Coordinador de Zona">Coordinador de Zona (1 - 20)</option>
-                      <option value="Coordinador de Ruta">Coordinador de Ruta (1 - 37)</option>
-                      <option value="Jefe de Sección">Jefe de Sección (60 Secciones)</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group" id="grupoEstZona" style="margin-bottom: 0;">
-                    <label>Zona Asignada (1 - 20):</label>
-                    <select id="estZona" required></select>
-                  </div>
-
-                  <div class="form-group" id="grupoEstRuta" style="margin-bottom: 0; display: none;">
-                    <label>Ruta Asignada (1 - 37):</label>
-                    <select id="estRuta"></select>
-                  </div>
-
-                  <div class="form-group" id="grupoEstSeccionUnica" style="margin-bottom: 0; display: none;">
-                    <label>Sección Asignada (1 Sección):</label>
-                    <select id="estSeccionUnica"></select>
-                  </div>
-
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label>Nombre(s):</label>
-                    <input type="text" id="estNombres" placeholder="Ej. ROBERTO CARLOS" required>
-                  </div>
-
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label>Apellidos:</label>
-                    <input type="text" id="estApellidos" placeholder="Ej. HERNÁNDEZ GÓMEZ" required>
-                  </div>
-
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label>Teléfono:</label>
-                    <input type="text" id="estTelefono" placeholder="Ej. 9141000000">
-                  </div>
-
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label>Localidad / Colonia:</label>
-                    <input type="text" id="estLocalidad" placeholder="Ej. CENTRO / R/A. HUIMANGO" required>
-                  </div>
-
-                </div>
-
-                <!-- Selector Múltiple de Secciones -->
-                <div id="grupoEstSeccionesMulti" style="margin-top: 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-                    <label style="margin: 0; font-weight: 600; color: #1e293b;">
-                      Secciones a Cargo (Marca 1 o más): <span id="contadorCheckSecciones" style="color: #2563eb;">0 seleccionadas</span>
-                    </label>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                      <input type="text" id="filtroCheckSecciones" placeholder="Filtrar sección..." onkeyup="filtrarCheckboxesSecciones('est')" style="padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; width: 140px;">
-                      <button type="button" onclick="limpiarCheckboxesSecciones('est')" class="btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;">Limpiar</button>
-                    </div>
-                  </div>
-                  <div id="gridCheckSeccionesEst" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 6px; max-height: 145px; overflow-y: auto; padding: 4px;"></div>
-                </div>
-
-                <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
-                  <button type="submit" class="btn-primary">💾 Guardar en Estructura</button>
-                </div>
-              </form>
+            <div class="acciones-form">
+              <button type="submit" class="btn btn-primario">Guardar Simpatizante</button>
+              <button type="button" id="btn-cancelar-simp" class="btn btn-secundario oculto" onclick="resetFormSimpatizante()">Cancelar Edición</button>
             </div>
+          </form>
+        </div>
 
-            <!-- FILTROS Y EXPORTACIÓN JERÁRQUICA DE ESTRUCTURA -->
-            <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="buscadorEstructura" placeholder="🔍 Buscar por nombre, apellidos, localidad o sección..." onkeyup="renderEstructuraPrincipal()" style="flex: 1; min-width: 220px; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-              <select id="filtroRolEstructura" onchange="renderEstructuraPrincipal()" style="padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                <option value="TODOS">Todos los Roles</option>
-                <option value="Coordinador de Zona">Coordinadores de Zona (20)</option>
-                <option value="Coordinador de Ruta">Coordinadores de Ruta (37)</option>
-                <option value="Jefe de Sección">Jefes de Sección (60)</option>
-              </select>
-              <select id="filtroZonaEstructura" onchange="renderEstructuraPrincipal()" style="padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                <option value="TODAS">Todas las Zonas</option>
-              </select>
-              <button onclick="exportarEstructuraExcel()" class="btn-primary" style="background: #16a34a; padding: 8px 12px; font-size: 0.85rem;">📗 Excel Jerárquico</button>
-              <button onclick="exportarEstructuraPDF()" class="btn-primary" style="background: #dc2626; padding: 8px 12px; font-size: 0.85rem;">📕 PDF Jerárquico</button>
+        <div class="tarjeta">
+          <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <input type="text" id="filtro-simp-seccion" placeholder="Sección..." oninput="renderizarSimpatizantes()" style="padding:8px; border:1px solid var(--borde); border-radius:6px; width:120px;" />
+              <input type="text" id="filtro-simp-busqueda" placeholder="Buscar por nombre o localidad..." oninput="renderizarSimpatizantes()" style="padding:8px; border:1px solid var(--borde); border-radius:6px; width:230px;" />
             </div>
+            <div id="herramientas-excel-simp" style="display:flex; flex-wrap:wrap; gap:8px;">
+              <input type="file" id="input-excel-simp" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelSimpatizantes(event)" />
+              <button type="button" class="btn btn-secundario" onclick="document.getElementById('input-excel-simp').click()">Importar Excel</button>
+              <button type="button" class="btn btn-verde" onclick="exportarExcelSimpatizantes()">Exportar Excel</button>
+            </div>
+          </div>
 
-            <!-- TABLA DE ESTRUCTURA PRINCIPAL -->
-            <div style="max-height: 480px; overflow-y: auto; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
-              <table class="table" style="margin: 0; width: 100%;">
-                <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.06);">
-                  <tr>
-                    <th>Zona</th>
-                    <th>Ruta</th>
-                    <th>Rol</th>
-                    <th>Sección(es) Asignada(s)</th>
-                    <th>Nombre Completo</th>
-                    <th>Teléfono</th>
-                    <th>Localidad</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="tablaEstructuraPrincipal"></tbody>
-              </table>
+          <div class="tabla-resp">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asistió</th>
+                  <th>Sección</th>
+                  <th>Nombre</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th>Referencia</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-simpatizantes-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- PESTAÑA 3: PROMOTORES                      -->
+      <!-- ========================================== -->
+      <section id="tab-promotores" class="panel-tab oculto">
+        <div class="tarjeta">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <h3 id="titulo-form-prom" style="margin:0;">Registrar Promotor</h3>
+            <button type="button" class="btn btn-ine" onclick="iniciarEscaneoINE('promotor')">
+              📷 Escanear Credencial INE
+            </button>
+          </div>
+
+          <div id="estado-ine-promotor" class="estado-ine oculto"></div>
+
+          <form id="form-promotor">
+            <input type="hidden" id="prom-id" />
+            <div class="grid-form">
+              <div class="campo">
+                <label for="prom-nombre">Nombre Completo *</label>
+                <input type="text" id="prom-nombre" required placeholder="EJ. MARIA GOMEZ RUIZ" />
+              </div>
+              <div class="campo">
+                <label for="prom-telefono">Teléfono</label>
+                <input type="tel" id="prom-telefono" placeholder="10 dígitos" />
+              </div>
+              <div class="campo">
+                <label for="prom-seccion">Sección (4 dígitos) *</label>
+                <input type="text" id="prom-seccion" list="lista-secciones-cunduacan" maxlength="4" required placeholder="0615" />
+              </div>
+              <div class="campo">
+                <label for="prom-localidad">Localidad / Ranchería / Col.</label>
+                <input type="text" id="prom-localidad" placeholder="EJ. POB. CUMUAPA" />
+              </div>
             </div>
-          </section>
-          
-          <!-- 1. Captura de Staff -->
-          <section id="admin-staff" class="card admin-seccion">
-            <h2>Crear Nuevo Usuario (Staff)</h2>
-            <form id="formCrearUsuario">
-              <div class="form-group"><label>Nombre de Usuario:</label><input type="text" id="nuevoUsuario" required></div>
-              <div class="form-group"><label>Contraseña temporal:</label><input type="text" id="nuevoPassword" required></div>
-              <div class="form-group">
-                <label>Rol:</label>
-                <select id="nuevoRol" onchange="toggleSeccionAdmin()" required>
-                  <option value="capturista">Capturista (Registra simpatizantes y promotores)</option>
-                  <option value="pase_lista">Pase de Lista (Verifica asistencia)</option>
-                  <option value="coordinador" id="optRolCoordinador">Coordinador (Gestiona Staff y BD)</option>
+            <div class="acciones-form">
+              <button type="submit" class="btn btn-primario">Guardar Promotor</button>
+              <button type="button" id="btn-cancelar-prom" class="btn btn-secundario oculto" onclick="resetFormPromotor()">Cancelar Edición</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="tarjeta">
+          <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <input type="text" id="filtro-prom-seccion" placeholder="Sección..." oninput="renderizarPromotores()" style="padding:8px; border:1px solid var(--borde); border-radius:6px; width:120px;" />
+              <input type="text" id="filtro-prom-busqueda" placeholder="Buscar promotor..." oninput="renderizarPromotores()" style="padding:8px; border:1px solid var(--borde); border-radius:6px; width:230px;" />
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <input type="file" id="input-excel-prom" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelPromotores(event)" />
+              <button type="button" class="btn btn-secundario" onclick="document.getElementById('input-excel-prom').click()">Importar Excel</button>
+              <button type="button" class="btn btn-verde" onclick="exportarExcelPromotores()">Exportar Excel</button>
+            </div>
+          </div>
+
+          <div class="tabla-resp">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sección</th>
+                  <th>Nombre</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-promotores-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- PESTAÑA 4: ESTRUCTURA PRINCIPAL            -->
+      <!-- ========================================== -->
+      <section id="tab-estructura" class="panel-tab oculto">
+        <div class="tarjeta">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <h3 id="titulo-form-est" style="margin:0;">Registrar en Estructura Principal</h3>
+            <button type="button" class="btn btn-ine" onclick="iniciarEscaneoINE('estructura')">
+              📷 Escanear Credencial INE
+            </button>
+          </div>
+
+          <div id="estado-ine-estructura" class="estado-ine oculto"></div>
+
+          <form id="form-estructura">
+            <input type="hidden" id="est-id" />
+            <div class="grid-form">
+              <div class="campo">
+                <label for="est-rol">Rol Territorial *</label>
+                <select id="est-rol" onchange="toggleCampoRutaEstructura()" required>
+                  <option value="Coordinador de Zona">Coordinador de Zona</option>
+                  <option value="Coordinador de Ruta">Coordinador de Ruta</option>
+                  <option value="Coordinador de Sección">Coordinador de Sección</option>
                 </select>
               </div>
-              <div class="form-group" id="divSeccionAdmin" style="display:none;"><label>Asignar Sección Electoral:</label><input type="text" id="nuevaSeccionAsignada"></div>
-              <button type="submit" class="btn-primary">Crear Usuario</button>
-            </form>
-          </section>
-
-          <!-- 2. Resumen Numérico -->
-          <section id="admin-resumen" class="card admin-seccion" style="display: none;">
-            <h2>Resumen Numérico</h2>
-            <table class="table"><thead><tr><th>Sección</th><th>Padrón</th><th>Ya Votaron</th></tr></thead><tbody id="tablaAvances"></tbody></table>
-          </section>
-
-          <!-- 3. Gráfica -->
-          <section id="admin-grafica" class="card admin-seccion" style="display: none;">
-            <h2>Gráfica de Avance por Sección</h2>
-            <canvas id="graficaAvances" height="120"></canvas>
-          </section>
-
-          <!-- 4. Lista General -->
-          <section id="admin-lista" class="card admin-seccion" style="display: none;">
-            <h2>Lista General de Simpatizantes</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="buscadorListaGlobal" placeholder="🔍 Buscar por nombre..." onkeyup="paginaActualLista = 1; renderListaGlobal()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-              <label style="margin:0; font-weight: 600;">Sección:</label>
-              <select id="filtroSeccionAdmin" onchange="paginaActualLista = 1; renderListaGlobal()" style="padding: 8px; border-radius: 6px; min-width: 120px;">
-                <option value="TODAS">Mostrar Todas</option>
-              </select>
-            </div>
-            <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
-              <table class="table" style="margin: 0; width: 100%;">
-                <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
-                  <tr><th>Sección</th><th>Nombre</th><th>Teléfono</th><th>Promotor / Ref</th><th>Estatus</th></tr>
-                </thead>
-                <tbody id="tablaGlobalAdmin"></tbody>
-              </table>
-            </div>
-            <div id="paginacionListaGlobal" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
-          </section>
-
-          <!-- 5. Edición de Simpatizantes -->
-          <section id="admin-gestion-simp" class="card admin-seccion" style="display: none;">
-            <h2>Base de Datos Editable: Simpatizantes</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="buscadorEditSimp" placeholder="🔍 Buscar por nombre..." onkeyup="paginaActualEditSimp = 1; renderGestionSimpatizantes()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-              <label style="margin:0; font-weight: 600;">Sección:</label>
-              <select id="filtroSeccionEditSimp" onchange="paginaActualEditSimp = 1; renderGestionSimpatizantes()" style="padding: 8px; border-radius: 6px; min-width: 120px;">
-                <option value="TODAS">Mostrar Todas</option>
-              </select>
-            </div>
-            <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
-              <table class="table" style="margin: 0; width: 100%;">
-                <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
-                  <tr><th>Sección</th><th>Nombre</th><th>Teléfono</th><th>Acciones</th></tr>
-                </thead>
-                <tbody id="tablaGestionSimp"></tbody>
-              </table>
-            </div>
-            <div id="paginacionEditSimp" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
-          </section>
-
-          <!-- 6. Edición de Staff -->
-          <section id="admin-gestion-staff" class="card admin-seccion" style="display: none;">
-            <h2>Base de Datos Editable: Staff</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-              <label style="margin:0; font-weight: 600;">Filtrar por Sección:</label>
-              <select id="filtroSeccionEditStaff" onchange="renderGestionStaff()" style="padding: 8px; border-radius: 6px; min-width: 150px;">
-                <option value="TODAS">Mostrar Todas</option>
-              </select>
-            </div>
-            <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
-              <table class="table" style="margin: 0; width: 100%;">
-                <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
-                  <tr><th>Usuario</th><th>Contraseña</th><th>Rol</th><th>Sección</th><th>Acciones</th></tr>
-                </thead>
-                <tbody id="tablaGestionStaff"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <!-- 7. Captura de Simpatizantes (Desde Admin) con Escáner INE -->
-          <section id="admin-captura" class="card admin-seccion" style="display: none;">
-            <h2>Captura de Simpatizante (Panel Admin)</h2>
-
-            <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
-            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-              <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
-                🪪 Autocompletar con Credencial INE o Capturar Manualmente:
+              <div class="campo">
+                <label for="est-zona">Zona (1 - 20) *</label>
+                <input type="number" id="est-zona" min="1" max="20" required />
               </div>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
-                <button type="button" onclick="abrirEscanerINE('admin-simp')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
-                  📷 Escanear con Cámara
-                </button>
-                <button type="button" onclick="document.getElementById('inputFotoINEAdminSimp').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
-                  🖼️ Subir Foto / Copia
-                </button>
-                <button type="button" onclick="enfocarCapturaManual('adminSimpApellidos')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
-                  ✍️ Captura Manual
-                </button>
+              <div class="campo oculto" id="grupo-est-ruta">
+                <label for="est-ruta">Ruta (1 - 37) *</label>
+                <input type="number" id="est-ruta" min="1" max="37" />
               </div>
-              <input type="file" id="inputFotoINEAdminSimp" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'admin-simp')">
-            </div>
-
-            <form id="formAdminSimpatizante">
-              <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="adminSimpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
-              <div class="form-group"><label>Nombre(s):</label><input type="text" id="adminSimpNombres" placeholder="Ej. JUAN" required></div>
-              <div class="form-group"><label>Teléfono:</label><input type="text" id="adminSimpTelefono" placeholder="Ej. 9141000000"></div>
-              <div class="form-group"><label>Sección Electoral:</label><input type="text" id="adminSimpSeccion" placeholder="Ej. 0645" required></div>
-              <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="adminSimpLocalidad" required></div>
-              <div class="form-group">
-                <label>Promotor que Invita:</label>
-                <input type="text" id="adminSimpPromotor" list="listaPromotoresAdmin" placeholder="Escribe para buscar promotor..." required>
-                <datalist id="listaPromotoresAdmin"></datalist>
+              <div class="campo">
+                <label for="est-seccion">Sección(es) (separadas por coma) *</label>
+                <input type="text" id="est-seccion" list="lista-secciones-cunduacan" required placeholder="Ej. 0609, 0610" />
               </div>
-              <button type="submit" class="btn-primary">Guardar Simpatizante</button>
-            </form>
-          </section>
-
-          <!-- 8. Pase de Lista Global (Desde Admin) -->
-          <section id="admin-pase-lista-global" class="card admin-seccion" style="display: none;">
-            <h2>Pase de Lista Global (Todas las Secciones)</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="buscadorPaseListaGlobal" placeholder="🔍 Buscar por nombre..." onkeyup="paginaActualPaseListaAdmin = 1; renderPaseListaGlobalAdmin()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-              <label style="margin:0; font-weight: 600;">Sección:</label>
-              <select id="filtroSeccionPaseListaGlobal" onchange="paginaActualPaseListaAdmin = 1; renderPaseListaGlobalAdmin()" style="padding: 8px; border-radius: 6px; min-width: 120px;">
-                <option value="TODAS">Mostrar Todas</option>
-              </select>
-            </div>
-            <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
-              <table class="table" style="margin: 0; width: 100%;">
-                <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
-                  <tr><th>Sección</th><th>Nombre</th><th>Localidad / Ref</th><th>Check In</th></tr>
-                </thead>
-                <tbody id="tablaPaseListaGlobal"></tbody>
-              </table>
-            </div>
-            <div id="paginacionPaseListaGlobal" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
-          </section>
-
-          <!-- 9. Captura de Promotor (Desde Admin) con Escáner INE -->
-          <section id="admin-captura-promotor" class="card admin-seccion" style="display: none;">
-            <h2>Captura de Promotor</h2>
-
-            <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
-            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-              <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
-                🪪 Autocompletar con Credencial INE o Capturar Manualmente:
+              <div class="campo">
+                <label for="est-nombres">Nombre(s) *</label>
+                <input type="text" id="est-nombres" required placeholder="EJ. CARLOS ALBERTO" />
               </div>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
-                <button type="button" onclick="abrirEscanerINE('admin-prom')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
-                  📷 Escanear con Cámara
-                </button>
-                <button type="button" onclick="document.getElementById('inputFotoINEAdminProm').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
-                  🖼️ Subir Foto / Copia
-                </button>
-                <button type="button" onclick="enfocarCapturaManual('promNombres')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
-                  ✍️ Captura Manual
-                </button>
+              <div class="campo">
+                <label for="est-apellidos">Apellidos *</label>
+                <input type="text" id="est-apellidos" required placeholder="EJ. HERNANDEZ DIAZ" />
               </div>
-              <input type="file" id="inputFotoINEAdminProm" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'admin-prom')">
+              <div class="campo">
+                <label for="est-telefono">Teléfono</label>
+                <input type="tel" id="est-telefono" placeholder="10 dígitos" />
+              </div>
+              <div class="campo">
+                <label for="est-localidad">Localidad</label>
+                <input type="text" id="est-localidad" placeholder="EJ. COL. CENTRO" />
+              </div>
             </div>
-
-            <form id="formAdminPromotor">
-              <div class="form-group"><label>Nombre(s):</label><input type="text" id="promNombres" placeholder="Ej. JUAN CARLOS" required></div>
-              <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="promApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
-              <div class="form-group"><label>Teléfono:</label><input type="text" id="promTelefono"></div>
-              <div class="form-group"><label>Sección Electoral:</label><input type="text" id="promSeccion" placeholder="Ej. 0645" required></div>
-              <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="promLocalidad" required></div>
-              <button type="submit" class="btn-primary">Guardar Promotor</button>
-            </form>
-          </section>
-
-          <!-- 10. Edición de Promotores -->
-          <section id="admin-gestion-promotores" class="card admin-seccion" style="display: none;">
-            <h2>Base de Datos Editable: Promotores</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="buscadorEditProm" placeholder="🔍 Buscar por nombre..." onkeyup="paginaActualEditProm = 1; renderGestionPromotores()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-              <label style="margin:0; font-weight: 600;">Sección:</label>
-              <select id="filtroSeccionEditProm" onchange="paginaActualEditProm = 1; renderGestionPromotores()" style="padding: 8px; border-radius: 6px; min-width: 120px;">
-                <option value="TODAS">Mostrar Todas</option>
-              </select>
+            <div class="acciones-form">
+              <button type="submit" class="btn btn-primario">Guardar Integrante</button>
+              <button type="button" id="btn-cancelar-est" class="btn btn-secundario oculto" onclick="resetFormEstructura()">Cancelar Edición</button>
             </div>
-            <div style="max-height: 450px; overflow-y: auto; overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
-              <table class="table" style="margin: 0; width: 100%;">
-                <thead style="position: sticky; top: 0; background: white; z-index: 1; box-shadow: 0 2px 2px rgba(0,0,0,0.1);">
-                  <tr><th>Sección</th><th>Nombre Completo</th><th>Teléfono</th><th>Localidad</th><th>Acciones</th></tr>
-                </thead>
-                <tbody id="tablaGestionProm"></tbody>
-              </table>
-            </div>
-            <div id="paginacionEditProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
-          </section>
+          </form>
+        </div>
 
-          <!-- 11. RESUMEN POR PROMOTOR CON EFECTIVIDAD -->
-          <section id="admin-resumen-promotor" class="card admin-seccion" style="display: none;">
-            <h2>Resumen por Promotor y Efectividad</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="buscadorResumenProm" placeholder="🔍 Buscar promotor por nombre..." onkeyup="paginaActualResumenProm = 1; renderResumenPromotor()" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-              <label style="margin:0; font-weight: 600;">Secc. Promotor:</label>
-              <select id="filtroSeccionResumenProm" onchange="paginaActualResumenProm = 1; renderResumenPromotor()" style="padding: 8px; border-radius: 6px; min-width: 120px;">
-                <option value="TODAS">Mostrar Todas</option>
-              </select>
-            </div>
+        <div class="tarjeta">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0;">Integrantes Registrados</h3>
+            <input type="number" id="filtro-est-zona" min="1" max="20" placeholder="Filtrar Zona..." oninput="renderizarEstructura()" style="padding:8px; border:1px solid var(--borde); border-radius:6px; width:140px;" />
+          </div>
+          <div class="tabla-resp">
+            <table>
+              <thead>
+                <tr>
+                  <th>Zona</th>
+                  <th>Ruta</th>
+                  <th>Rol</th>
+                  <th>Secciones</th>
+                  <th>Nombre</th>
+                  <th>Teléfono</th>
+                  <th>Localidad</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-estructura-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-            <div id="contenedorResumenPromotores" style="max-height: 500px; overflow-y: auto; padding-right: 5px;"></div>
-            
-            <div id="paginacionResumenProm" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 6px; text-align: center;"></div>
-          </section>
-
-          <!-- 12. EXPORTAR E IMPORTAR BASE DE DATOS -->
-          <section id="admin-exportar-importar" class="card admin-seccion" style="display: none;">
-            <h2>💾 Exportar e Importar Base de Datos</h2>
-            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 20px;">
-              Descarga respaldos completos o filtrados por sección en formato Excel o PDF, o carga registros masivos desde una hoja de cálculo.
-            </p>
-
-            <!-- BLOQUE EXPORTAR -->
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-              <h3 style="margin-bottom: 12px; color: #1e293b;">📤 Exportar Datos</h3>
-
-              <div style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #ffffff; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                <label for="filtroSeccionExportar" style="margin: 0; font-weight: 600; color: #1e293b;">Filtrar exportación por Sección:</label>
-                <select id="filtroSeccionExportar" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #94a3b8; min-width: 180px; background: #ffffff; font-weight: 500;">
-                  <option value="TODAS">Todas las Secciones</option>
+      <!-- ========================================== -->
+      <!-- PESTAÑA 5: USUARIOS / STAFF (SOLO ADMIN)   -->
+      <!-- ========================================== -->
+      <section id="tab-usuarios" class="panel-tab oculto">
+        <div class="tarjeta">
+          <h3 style="margin-top:0;">Crear Usuario de Equipo</h3>
+          <form id="form-usuario">
+            <div class="grid-form">
+              <div class="campo">
+                <label for="usu-nombre">Usuario *</label>
+                <input type="text" id="usu-nombre" required />
+              </div>
+              <div class="campo">
+                <label for="usu-password">Contraseña Inicial *</label>
+                <input type="text" id="usu-password" required />
+              </div>
+              <div class="campo">
+                <label for="usu-rol">Rol *</label>
+                <select id="usu-rol" onchange="toggleCampoSeccionUsuario()">
+                  <option value="capturista">Capturista</option>
+                  <option value="pase_lista">Pase de Lista</option>
+                  <option value="admin">Administrador</option>
                 </select>
               </div>
-              
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
-                <button onclick="exportarSimpatizantesExcel()" class="btn-primary" style="background: #16a34a;">
-                  📗 Simpatizantes (Excel)
-                </button>
-                <button onclick="exportarSimpatizantesPDF()" class="btn-primary" style="background: #dc2626;">
-                  📕 Simpatizantes (PDF)
-                </button>
-                <button onclick="exportarPromotoresExcel()" class="btn-primary" style="background: #15803d;">
-                  📗 Promotores (Excel)
-                </button>
-                <button onclick="exportarPromotoresPDF()" class="btn-primary" style="background: #b91c1c;">
-                  📕 Promotores y Efectividad (PDF)
-                </button>
-                <button onclick="exportarEstructuraExcel()" class="btn-primary" style="background: #2563eb;">
-                  🏛️ Estructura Jerárquica (Excel)
-                </button>
-                <button onclick="exportarEstructuraPDF()" class="btn-primary" style="background: #1d4ed8;">
-                  🏛️ Estructura Jerárquica (PDF)
-                </button>
+              <div class="campo oculto" id="grupo-usu-seccion">
+                <label for="usu-seccion">Sección Asignada *</label>
+                <input type="text" id="usu-seccion" list="lista-secciones-cunduacan" maxlength="4" placeholder="0615" />
               </div>
             </div>
-
-            <!-- BLOQUE IMPORTAR -->
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
-              <h3 style="margin-bottom: 8px; color: #1e293b;">📥 Importar desde Excel (.xlsx / .csv)</h3>
-              <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 14px;">
-                El archivo Excel debe respetar los encabezados de columna exactos. Puedes descargar una plantilla vacía para llenarla fácilmente:
-              </p>
-
-              <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px;">
-                <button onclick="descargarPlantillaSimpatizantes()" class="btn-secondary" style="font-size: 0.85rem;">
-                  📄 Descargar Plantilla Simpatizantes
-                </button>
-                <button onclick="descargarPlantillaPromotores()" class="btn-secondary" style="font-size: 0.85rem;">
-                  📄 Descargar Plantilla Promotores
-                </button>
-              </div>
-
-              <!-- Subir Simpatizantes -->
-              <div style="border-top: 1px solid #cbd5e1; padding-top: 14px; margin-bottom: 14px;">
-                <label style="font-weight: 600; display: block; margin-bottom: 6px;">1. Importar Simpatizantes (Columnas: <code>nombre, telefono, seccion, localidad, referencia</code>):</label>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                  <input type="file" id="archivoExcelSimpatizantes" accept=".xlsx, .xls, .csv" style="flex: 1; background: white; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                  <button onclick="importarExcel('simpatizantes')" class="btn-primary">⬆️ Subir Simpatizantes</button>
-                </div>
-              </div>
-
-              <!-- Subir Promotores -->
-              <div style="border-top: 1px solid #cbd5e1; padding-top: 14px;">
-                <label style="font-weight: 600; display: block; margin-bottom: 6px;">2. Importar Promotores (Columnas: <code>nombre, telefono, seccion, localidad</code>):</label>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                  <input type="file" id="archivoExcelPromotores" accept=".xlsx, .xls, .csv" style="flex: 1; background: white; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                  <button onclick="importarExcel('promotores')" class="btn-primary">⬆️ Subir Promotores</button>
-                </div>
-              </div>
+            <div class="acciones-form">
+              <button type="submit" class="btn btn-primario">Crear Usuario</button>
             </div>
-          </section>
-
-        </main>
-      </div>
-    </div>
-
-    <!-- VISTA 3: CAPTURISTA REGULAR -->
-    <div id="vista-capturista" style="display: none;" class="card">
-      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
-        <button onclick="mostrarSubvistaCapturista('subvista-simp')" id="btnTabSimp" class="btn-primary" style="flex:1;">✍️ Capturar Simpatizante</button>
-        <button onclick="mostrarSubvistaCapturista('subvista-prom')" id="btnTabProm" class="btn-secondary" style="flex:1;">👔 Capturar Promotor</button>
-      </div>
-
-      <!-- Captura Simpatizante -->
-      <div id="subvista-simp" class="form-centered" style="margin: 0 auto; max-width: 100%;">
-        <h2>Captura de Simpatizante</h2>
-
-        <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-          <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
-            🪪 Autocompletar con Credencial INE o Capturar Manualmente:
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">
-            <button type="button" onclick="abrirEscanerINE('cap-simp')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
-              📷 Escanear con Cámara
-            </button>
-            <button type="button" onclick="document.getElementById('inputFotoINECapSimp').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
-              🖼️ Subir Foto / Copia
-            </button>
-            <button type="button" onclick="enfocarCapturaManual('simpApellidos')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
-              ✍️ Captura Manual
-            </button>
-          </div>
-          <input type="file" id="inputFotoINECapSimp" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'cap-simp')">
+          </form>
         </div>
 
-        <form id="formSimpatizante">
-          <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="simpApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
-          <div class="form-group"><label>Nombre(s):</label><input type="text" id="simpNombres" placeholder="Ej. JUAN" required></div>
-          <div class="form-group"><label>Teléfono:</label><input type="text" id="simpTelefono" placeholder="Ej. 9141000000"></div>
-          <div class="form-group"><label>Sección Electoral:</label><input type="text" id="simpSeccion" placeholder="Ej. 0645" required></div>
-          <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="simpLocalidad" required></div>
-          <div class="form-group">
-            <label>Promotor que Invita:</label>
-            <input type="text" id="simpPromotor" list="listaPromotoresCapturista" placeholder="Escribe para buscar promotor..." required>
-            <datalist id="listaPromotoresCapturista"></datalist>
-          </div>
-          <button type="submit" class="btn-primary">Guardar Simpatizante</button>
-        </form>
-      </div>
-
-      <!-- Captura Promotor por Capturista -->
-      <div id="subvista-prom" class="form-centered" style="display: none; margin: 0 auto; max-width: 100%;">
-        <h2>Captura de Promotor</h2>
-
-        <!-- BARRA DE MÉTODOS DE CAPTURA INE -->
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-          <div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-bottom: 8px;">
-            🪪 Autocompletar con Credencial INE o Capturar Manualmente:
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">
-            <button type="button" onclick="abrirEscanerINE('cap-prom')" class="btn-primary" style="background: #1d4ed8; font-size: 0.85rem; padding: 8px 10px;">
-              📷 Escanear con Cámara
-            </button>
-            <button type="button" onclick="document.getElementById('inputFotoINECapProm').click()" class="btn-primary" style="background: #0f766e; font-size: 0.85rem; padding: 8px 10px;">
-              🖼️ Subir Foto / Copia
-            </button>
-            <button type="button" onclick="enfocarCapturaManual('capPromNombres')" class="btn-secondary" style="font-size: 0.85rem; padding: 8px 10px;">
-              ✍️ Captura Manual
-            </button>
-          </div>
-          <input type="file" id="inputFotoINECapProm" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, 'cap-prom')">
-        </div>
-
-        <form id="formCapturistaPromotor">
-          <div class="form-group"><label>Nombre(s):</label><input type="text" id="capPromNombres" placeholder="Ej. JUAN CARLOS" required></div>
-          <div class="form-group"><label>Apellido Paterno y Materno:</label><input type="text" id="capPromApellidos" placeholder="Ej. PÉREZ LÓPEZ" required></div>
-          <div class="form-group"><label>Teléfono:</label><input type="text" id="capPromTelefono"></div>
-          <div class="form-group"><label>Sección Electoral:</label><input type="text" id="capPromSeccion" placeholder="Ej. 0645" required></div>
-          <div class="form-group"><label>Localidad / Colonia:</label><input type="text" id="capPromLocalidad" required></div>
-          <button type="submit" class="btn-primary">Guardar Promotor</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- VISTA 4: PASE DE LISTA REGULAR -->
-    <div id="vista-lista" style="display: none;" class="card">
-      <h2 id="tituloSeccionLista">Pase de Lista - Sección: </h2>
-      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <input type="text" id="buscadorLista" placeholder="🔍 Buscar por nombre..." onkeyup="filtrarLista()" style="flex: 1;">
-        <button onclick="cargarPaseDeLista()" class="btn-secondary">Recargar</button>
-      </div>
-      <div style="overflow-x: auto;">
-        <table class="table">
-          <thead><tr><th>Nombre</th><th>Localidad</th><th>Referencia / Promotor</th><th>Check In</th></tr></thead>
-          <tbody id="tablaPaseLista"></tbody>
-        </table>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- MODAL ESCÁNER DE CREDENCIAL INE (CÁMARA + ENCUADRE + LECTURA SOLO DE NOMBRE, DOMICILIO Y SECCIÓN) -->
-  <div id="modalEscanerINE" class="modal">
-    <div class="modal-content" style="max-width: 560px; max-height: 92vh; overflow-y: auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <h3 style="margin: 0; color: #1e293b;">🪪 Escáner de Credencial INE</h3>
-        <button type="button" onclick="cerrarEscanerINE()" class="btn-secondary" style="padding: 4px 10px;">✖️</button>
-      </div>
-
-      <!-- PASO 1: VISOR DE CÁMARA EN VIVO -->
-      <div id="contenedorCamaraINE" style="display: none; margin-bottom: 12px;">
-        <p style="font-size: 0.82rem; color: #475569; margin-bottom: 8px;">
-          Mantén el teléfono a <strong>20–25 cm</strong>, usa el <strong>Zoom</strong> y toca el video si necesitas re-enfocar.
-        </p>
-        <div style="position: relative; width: 100%; background: #0f172a; border-radius: 8px; overflow: hidden; cursor: crosshair;" onclick="reenfocarCamaraINE(event)">
-          <video id="videoEscanerINE" autoplay playsinline muted style="width: 100%; max-height: 280px; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.15s ease;"></video>
-          <div style="position: absolute; inset: 12%; border: 2px dashed #38bdf8; border-radius: 8px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.35);"></div>
-          <div id="indicadorEnfoqueINE" style="display: none; position: absolute; width: 54px; height: 54px; border: 2px solid #22c55e; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 10px rgba(34, 197, 94, 0.7);"></div>
-          <div style="position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,0.75); color: #f8fafc; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; pointer-events: none;">
-            Toca el video para enfocar
+        <div class="tarjeta">
+          <h3 style="margin-top:0;">Usuarios Registrados</h3>
+          <div class="tabla-resp">
+            <table>
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Contraseña</th>
+                  <th>Rol</th>
+                  <th>Sección</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-usuarios-body"></tbody>
+            </table>
           </div>
         </div>
-
-        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; margin-top: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-            <label for="sliderZoomINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
-              🔍 Zoom: <span id="valorZoomINE">1.0x</span>
-            </label>
-            <input type="range" id="sliderZoomINE" min="1" max="3" step="0.1" value="1" oninput="ajustarZoomINE(this.value)" style="flex: 1; cursor: pointer;">
-          </div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <button type="button" onclick="reenfocarCamaraINE()" class="btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 6px 8px;">
-              🎯 Re-enfocar
-            </button>
-            <button type="button" id="btnLinternaINE" onclick="alternarLinternaINE()" class="btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 6px 8px; display: none;">
-              🔦 Luz: OFF
-            </button>
-            <button type="button" onclick="cambiarCamaraINE()" class="btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 6px 8px;">
-              🔄 Girar Cámara
-            </button>
-          </div>
-        </div>
-
-        <div style="margin-top: 8px;">
-          <button type="button" onclick="capturarFotoCamaraINE()" class="btn-primary" style="width: 100%; background: #16a34a; font-size: 0.95rem;">
-            📸 Capturar Foto
-          </button>
-        </div>
-      </div>
-
-      <!-- PASO 2: ENCUADRE Y RECORTE DE LA CREDENCIAL -->
-      <div id="pasoRecorteINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
-        <div style="font-size: 0.83rem; font-weight: 700; color: #1e40af; margin-bottom: 6px;">
-          ✂️ Alinea la credencial con las 3 cajas (1. Nombre, 2. Domicilio, 3. Sección):
-        </div>
-        <div style="position: relative; width: 100%; background: #0f172a; border-radius: 6px; overflow: hidden; touch-action: none;">
-          <canvas id="canvasRecorteINE" style="width: 100%; display: block; cursor: grab;"></canvas>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
-          <label for="sliderZoomRecorteINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
-            🔍 Zoom: <span id="valorZoomRecorteINE">1.0x</span>
-          </label>
-          <input type="range" id="sliderZoomRecorteINE" min="0.6" max="3.5" step="0.05" value="1" oninput="actualizarZoomRecorteINE(this.value)" style="flex: 1; cursor: pointer;">
-          <button type="button" onclick="rotarImagenRecorteINE()" class="btn-secondary" style="font-size: 0.8rem; padding: 5px 9px; white-space: nowrap;">
-            ↻ Rotar 90°
-          </button>
-        </div>
-
-        <!-- SELECTOR DE LADO DE LA CREDENCIAL PARA APLICAR ZONAS EXACTAS -->
-        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
-          <label for="selectLadoINE" style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #1e293b; white-space: nowrap;">
-            Lado capturado:
-          </label>
-          <select id="selectLadoINE" onchange="dibujarVistaPreviaRecorteINE()" style="flex: 1; padding: 4px 6px; font-size: 0.82rem; border: 1px solid #94a3b8; border-radius: 4px;">
-            <option value="FRENTE">🪪 Frente (Nombre, Domicilio, Sección)</option>
-            <option value="REVERSO">🔄 Reverso (Lectura MRZ de Nombre y Apellidos)</option>
-            <option value="COMPLETA">📄 Hoja / Copia completa sin encuadre</option>
-          </select>
-        </div>
-
-        <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button type="button" onclick="confirmarRecorteYLeerINE()" class="btn-primary" style="flex: 1; background: #16a34a; font-size: 0.94rem;">
-            🔍 Leer Datos de Credencial
-          </button>
-        </div>
-      </div>
-
-      <!-- AVISO SI LA CÁMARA NO ESTÁ DISPONIBLE -->
-      <div id="avisoCamaraINE" style="display: none; background: #fefce8; border: 1px solid #fef08a; color: #854d0e; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 10px;"></div>
-
-      <!-- BOTONES DE CÁMARA NATIVA Y SUBIDA DE ARCHIVO -->
-      <div style="margin-bottom: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
-        <button type="button" onclick="document.getElementById('inputCamaraNativaINE').click()" class="btn-primary" style="background: #0284c7; font-size: 0.82rem; padding: 8px 10px;">
-          📱 Cámara Nativa (Máximo Enfoque)
-        </button>
-        <button type="button" onclick="document.getElementById('inputFotoINEModal').click()" class="btn-secondary" style="font-size: 0.82rem; padding: 8px 10px;">
-          🖼️ Elegir Foto / Copia Guardada
-        </button>
-        <input type="file" id="inputCamaraNativaINE" accept="image/*" capture="environment" style="display: none;" onchange="procesarArchivoINE(event, null)">
-        <input type="file" id="inputFotoINEModal" accept="image/*" style="display: none;" onchange="procesarArchivoINE(event, null)">
-      </div>
-
-      <!-- ESTADO / PROGRESO DEL ESCANEO -->
-      <div id="estadoEscanerINE" style="display: none; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 0.88rem; color: #1e293b;"></div>
-
-      <!-- RESULTADOS DETECTADOS EDITABLES ANTES DE PASAR AL FORMULARIO -->
-      <div id="resultadoEscanerINE" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <strong style="color: #166534; font-size: 0.95rem;">✅ Datos Detectados (Verifica o edita):</strong>
-          <span id="badgeTipoLecturaINE" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">OCR ROI</span>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 8px;">
-          <label style="font-size: 0.82rem;">Apellidos (Paterno y Materno):</label>
-          <input type="text" id="ineDetectadoApellidos" placeholder="Apellidos">
-        </div>
-        <div class="form-group" style="margin-bottom: 8px;">
-          <label style="font-size: 0.82rem;">Nombre(s):</label>
-          <input type="text" id="ineDetectadoNombres" placeholder="Nombre(s)">
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px;">
-          <div class="form-group" style="margin-bottom: 8px;">
-            <label style="font-size: 0.82rem;">Sección:</label>
-            <input type="text" id="ineDetectadoSeccion" placeholder="Ej. 0645">
-          </div>
-          <div class="form-group" style="margin-bottom: 8px;">
-            <label style="font-size: 0.82rem;">Localidad / Colonia:</label>
-            <input type="text" id="ineDetectadoLocalidad" placeholder="Localidad">
-          </div>
-        </div>
-
-        <details style="margin-bottom: 10px; font-size: 0.78rem; color: #64748b;">
-          <summary style="cursor: pointer;">Ver texto crudo leído por zona</summary>
-          <pre id="ineTextoCrudoDebug" style="white-space: pre-wrap; background: #e2e8f0; padding: 6px; border-radius: 4px; max-height: 110px; overflow-y: auto; margin-top: 4px;"></pre>
-        </details>
-
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button type="button" onclick="aplicarDatosINEAlFormulario()" class="btn-primary" style="flex: 2; background: #16a34a;">
-            ✅ Pasar Datos al Formulario
-          </button>
-          <button type="button" onclick="volverAEncuadrarINE()" class="btn-secondary" style="flex: 1; font-size: 0.82rem;">
-            ✂️ Re-encuadrar
-          </button>
-          <button type="button" onclick="escanearOtroLadoINE()" class="btn-secondary" style="flex: 1; font-size: 0.82rem;">
-            🔄 Otro Lado
-          </button>
-        </div>
-      </div>
+      </section>
     </div>
   </div>
 
-  <!-- MODAL EDITAR SIMPATIZANTE -->
-  <div id="modalEditarSimp" class="modal">
-    <div class="modal-content">
-      <h3>Editar Simpatizante</h3>
-      <form id="formEditarSimp">
-        <input type="hidden" id="editSimpId">
-        <div class="form-group"><label>Nombre Completo (Apellidos, Nombres):</label><input type="text" id="editSimpNombre" required></div>
-        <div class="form-group"><label>Teléfono:</label><input type="text" id="editSimpTelefono"></div>
-        <div class="form-group"><label>Sección:</label><input type="text" id="editSimpSeccion" required></div>
-        <div class="form-group"><label>Localidad:</label><input type="text" id="editSimpLocalidad"></div>
-        <div class="form-group"><label>Promotor / Referencia:</label><input type="text" id="editSimpReferencia" required></div>
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-          <button type="submit" class="btn-primary">Guardar Cambios</button>
-          <button type="button" class="btn-secondary" onclick="document.getElementById('modalEditarSimp').style.display='none'">Cancelar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL EDITAR PROMOTOR -->
-  <div id="modalEditarProm" class="modal">
-    <div class="modal-content">
-      <h3>Editar Promotor</h3>
-      <form id="formEditarProm">
-        <input type="hidden" id="editPromId">
-        <div class="form-group"><label>Nombre Completo (Nombres Apellidos):</label><input type="text" id="editPromNombre" required></div>
-        <div class="form-group"><label>Teléfono:</label><input type="text" id="editPromTelefono"></div>
-        <div class="form-group"><label>Sección:</label><input type="text" id="editPromSeccion" required></div>
-        <div class="form-group"><label>Localidad:</label><input type="text" id="editPromLocalidad"></div>
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-          <button type="submit" class="btn-primary">Guardar Cambios</button>
-          <button type="button" class="btn-secondary" onclick="document.getElementById('modalEditarProm').style.display='none'">Cancelar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL EDITAR INTEGRANTE DE ESTRUCTURA PRINCIPAL -->
-  <div id="modalEditarEstructura" class="modal">
-    <div class="modal-content" style="max-width: 560px; max-height: 90vh; overflow-y: auto;">
-      <h3>Editar Integrante de Estructura Principal</h3>
-      <form id="formEditarEstructura">
-        <input type="hidden" id="editEstId">
-        <div class="form-group">
-          <label>Rol en la Estructura:</label>
-          <select id="editEstRol" onchange="actualizarCamposModalEstructura()" required>
-            <option value="Coordinador de Zona">Coordinador de Zona</option>
-            <option value="Coordinador de Ruta">Coordinador de Ruta</option>
-            <option value="Jefe de Sección">Jefe de Sección</option>
-          </select>
-        </div>
-        <div class="form-group" id="grupoEditEstZona">
-          <label>Zona (1 - 20):</label>
-          <select id="editEstZona" required></select>
-        </div>
-        <div class="form-group" id="grupoEditEstRuta">
-          <label>Ruta (1 - 37):</label>
-          <select id="editEstRuta"></select>
-        </div>
-        <div class="form-group" id="grupoEditEstSeccionUnica">
-          <label>Sección Electoral (1 Sección):</label>
-          <select id="editEstSeccionUnica"></select>
-        </div>
-        <div class="form-group" id="grupoEditEstSeccionesMulti">
-          <label>Secciones a Cargo (1 o más): <span id="contadorEditCheckSecciones" style="color: #2563eb;">0 seleccionadas</span></label>
-          <div id="gridCheckSeccionesEdit" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; max-height: 140px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: #f8fafc;"></div>
-        </div>
-        <div class="form-group"><label>Nombre(s):</label><input type="text" id="editEstNombres" required></div>
-        <div class="form-group"><label>Apellidos:</label><input type="text" id="editEstApellidos" required></div>
-        <div class="form-group"><label>Teléfono:</label><input type="text" id="editEstTelefono"></div>
-        <div class="form-group"><label>Localidad:</label><input type="text" id="editEstLocalidad" required></div>
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-          <button type="submit" class="btn-primary">Guardar Cambios</button>
-          <button type="button" class="btn-secondary" onclick="document.getElementById('modalEditarEstructura').style.display='none'">Cancelar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script src="app.js?v=18"></script>
+  <script src="app.js"></script>
 </body>
 </html>
