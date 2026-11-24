@@ -561,7 +561,7 @@ app.delete('/api/estructura/:id', async (req, res) => {
 });
 
 // Ruta fallback para servir el frontend
-app.get('*', (_req, res) => {
+app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
