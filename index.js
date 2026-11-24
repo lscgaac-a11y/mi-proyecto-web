@@ -40,6 +40,35 @@ function normalizarSeccion(sec) {
   return digitos ? digitos.padStart(4, '0') : '';
 }
 
+function esperar(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generarConReintentos(ai, solicitud, maxIntentos = 3) {
+  let ultimoError;
+  for (let intento = 1; intento <= maxIntentos; intento++) {
+    try {
+      return await ai.models.generateContent(solicitud);
+    } catch (error) {
+      ultimoError = error;
+      const textoErr = String(error?.message || '');
+      const esTemporal =
+        error?.status === 503 ||
+        error?.status === 429 ||
+        textoErr.includes('503') ||
+        textoErr.includes('429') ||
+        textoErr.includes('UNAVAILABLE') ||
+        textoErr.includes('high demand');
+
+      if (!esTemporal || intento === maxIntentos) {
+        throw error;
+      }
+      await esperar(1500 * intento);
+    }
+  }
+  throw ultimoError;
+}
+
 // ==========================================
 // INICIALIZACIÓN DE TABLAS EN POSTGRESQL
 // ==========================================
@@ -126,7 +155,7 @@ app.post('/api/ine/escanear', async (req, res) => {
       '- localidad: colonia, ranchería, poblado o ejido que aparece en el domicilio (sin código postal ni municipio).'
     ].join('\n');
 
-    const response = await ai.models.generateContent({
+    const response = await generarConReintentos(ai, {
       model: 'gemini-3.8-flash',
       contents: [
         {
@@ -184,9 +213,19 @@ app.post('/api/ine/escanear', async (req, res) => {
     });
   } catch (error) {
     console.error('Error al procesar INE con Gemini:', error);
-    const detalle = error?.message || 'Error desconocido';
+    const textoErr = String(error?.message || '');
+    if (textoErr.includes('503') || textoErr.includes('UNAVAILABLE') || textoErr.includes('high demand')) {
+      return res.status(503).json({
+        error: 'Los servidores de IA tienen alta demanda en este momento. Espera 5 segundos y vuelve a intentar.'
+      });
+    }
+    if (textoErr.includes('429') || textoErr.includes('RESOURCE_EXHAUSTED')) {
+      return res.status(429).json({
+        error: 'Se alcanzó el límite de escaneos por minuto. Espera 15 segundos e intenta de nuevo.'
+      });
+    }
     return res.status(500).json({
-      error: `Error al analizar la credencial con Gemini: ${detalle}`
+      error: `Error al analizar la credencial con Gemini: ${textoErr || 'Error desconocido'}`
     });
   }
 });
@@ -560,7 +599,7 @@ app.delete('/api/estructura/:id', async (req, res) => {
   }
 });
 
-// Ruta fallback para servir el frontend
+// Ruta fallback compatible con Express 4 y 5
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
