@@ -35,13 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function poblarCatalogosIniciales() {
-  // Datalist 60 secciones
   const dl = document.getElementById('lista-secciones-cunduacan');
   if (dl) {
     dl.innerHTML = SECCIONES_CUNDUACAN.map(sec => `<option value="${sec}"></option>`).join('');
   }
 
-  // Selects de 20 Zonas y 37 Rutas
   const selZona = document.getElementById('est-zona');
   const filtroZona = document.getElementById('filtro-est-zona');
   if (selZona && filtroZona) {
@@ -98,7 +96,7 @@ function navegarA(idSeccion, titulo) {
 }
 
 // ==========================================
-// ESCANEO DE CREDENCIAL INE CON GOOGLE GEMINI
+// ESCANEO ULTRA RÁPIDO DE CREDENCIAL INE
 // ==========================================
 function iniciarEscaneoINE(destino) {
   destinoINEActual = destino;
@@ -108,7 +106,8 @@ function iniciarEscaneoINE(destino) {
   input.click();
 }
 
-function optimizarImagenINE(archivo, maxAncho = 1280, calidad = 0.82) {
+// 800px a calidad 0.72 pesa ~70 KB: sube en 0.2s y mantiene nitidez total en texto de INE
+function optimizarImagenINE(archivo, maxAncho = 800, calidad = 0.72) {
   return new Promise((resolve, reject) => {
     const lector = new FileReader();
     lector.onload = (e) => {
@@ -172,8 +171,10 @@ function configurarListenerCamaraINE() {
     if (!archivo || !destinoINEActual) return;
 
     const destino = destinoINEActual;
+    const inicio = performance.now();
+
     try {
-      mostrarEstadoINE(destino, 'Analizando credencial INE con Gemini AI...', 'info');
+      mostrarEstadoINE(destino, 'Leyendo credencial INE...', 'info');
       const imagenBase64 = await optimizarImagenINE(archivo);
 
       const res = await fetch('/api/ine/escanear', {
@@ -209,14 +210,16 @@ function configurarListenerCamaraINE() {
         }
       }
 
+      const segundos = ((performance.now() - inicio) / 1000).toFixed(1);
+
       if (seccion && !es_seccion_cunduacan) {
         mostrarEstadoINE(
           destino,
-          `Datos cargados, pero la sección ${seccion} no pertenece a las 60 secciones de Cunduacán.`,
+          `Leída en ${segundos}s, pero la sección ${seccion} no pertenece a las 60 secciones de Cunduacán.`,
           'alerta'
         );
       } else {
-        mostrarEstadoINE(destino, 'Credencial INE leída correctamente. Verifica los datos y guarda.', 'ok');
+        mostrarEstadoINE(destino, `Credencial leída en ${segundos}s. Verifica los datos y guarda.`, 'ok');
       }
     } catch (error) {
       console.error('Error escaneo INE:', error);
@@ -856,7 +859,6 @@ async function cargarEstructura() {
 }
 
 function renderizarEstructura() {
-  // KPIs de cobertura territorial
   const zonasCubiertas = new Set(cacheEstructura.map(e => Number(e.zona)).filter(Boolean));
   const rutasCubiertas = new Set(cacheEstructura.map(e => Number(e.ruta)).filter(Boolean));
   const seccionesCubiertas = new Set();

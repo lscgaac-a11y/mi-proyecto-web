@@ -24,6 +24,15 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000
 });
 
+// Reutilizar una sola instancia del cliente de Google AI para ahorrar tiempo en cada petición
+let clienteAI = null;
+function obtenerClienteAI() {
+  if (!clienteAI && process.env.GEMINI_API_KEY) {
+    clienteAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return clienteAI;
+}
+
 // Catálogo oficial de las 60 secciones electorales de Cunduacán, Tabasco
 const SECCIONES_CUNDUACAN = new Set([
   ...Array.from({ length: 59 }, (_, i) => String(609 + i).padStart(4, '0')).filter(s => s !== '0654'),
@@ -44,7 +53,7 @@ function esperar(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generarConReintentos(ai, solicitud, maxIntentos = 3) {
+async function generarRapidoConReintentos(ai, solicitud, maxIntentos = 3) {
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
     try {
@@ -52,6 +61,15 @@ async function generarConReintentos(ai, solicitud, maxIntentos = 3) {
     } catch (error) {
       ultimoError = error;
       const textoErr = String(error?.message || '');
+
+      // Si el modelo no admite thinkingBudget: 0, reintenta de inmediato sin esa opción
+      if (solicitud.config?.thinkingConfig && (error?.status === 400 || textoErr.includes('thinking'))) {
+        const copiaConfig = { ...solicitud.config };
+        delete copiaConfig.thinkingConfig;
+        solicitud = { ...solicitud, config: copiaConfig };
+        continue;
+      }
+
       const esTemporal =
         error?.status === 503 ||
         error?.status === 429 ||
@@ -63,7 +81,7 @@ async function generarConReintentos(ai, solicitud, maxIntentos = 3) {
       if (!esTemporal || intento === maxIntentos) {
         throw error;
       }
-      await esperar(1500 * intento);
+      await esperar(700 * intento);
     }
   }
   throw ultimoError;
@@ -129,11 +147,12 @@ async function inicializarBD() {
 }
 
 // ==========================================
-// ESCANEO DE CREDENCIAL INE CON GEMINI 3.8 FLASH
+// ESCANEO RÁPIDO DE CREDENCIAL INE CON GEMINI
 // ==========================================
 app.post('/api/ine/escanear', async (req, res) => {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    const ai = obtenerClienteAI();
+    if (!ai) {
       return res.status(500).json({ error: 'Falta configurar GEMINI_API_KEY en el servidor.' });
     }
 
@@ -143,19 +162,13 @@ app.post('/api/ine/escanear', async (req, res) => {
     }
 
     const base64Limpio = imagenBase64.replace(/^data:image\/\w+;base64,/, '');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const prompt = [
-      'Analiza esta imagen de una credencial para votar del INE de México (puede ser original a color o fotocopia en blanco y negro).',
-      'Extrae con precisión:',
-      '- es_ine_valida: true si corresponde a una credencial para votar INE/IFE legible, false en caso contrario.',
-      '- apellidos: apellido paterno y materno en mayúsculas sin acentos.',
-      '- nombres: nombre o nombres de pila en mayúsculas sin acentos.',
-      '- seccion: número de sección electoral de 4 dígitos (por ejemplo 0615 o 1202).',
-      '- localidad: colonia, ranchería, poblado o ejido que aparece en el domicilio (sin código postal ni municipio).'
-    ].join('\n');
+    const prompt =
+      'Lee esta credencial INE/IFE de México (original o copia). Devuelve JSON: ' +
+      'es_ine_valida (boolean), apellidos (mayúsculas sin acentos), nombres (mayúsculas sin acentos), ' +
+      'seccion (4 dígitos), localidad (colonia, ranchería o poblado sin CP ni municipio).';
 
-    const response = await generarConReintentos(ai, {
+    const response = await generarRapidoConReintentos(ai, {
       model: 'gemini-3.8-flash',
       contents: [
         {
@@ -172,7 +185,8 @@ app.post('/api/ine/escanear', async (req, res) => {
         }
       ],
       config: {
-        temperature: 0.1,
+        temperature: 0,
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -188,8 +202,7 @@ app.post('/api/ine/escanear', async (req, res) => {
       }
     });
 
-    const textoJson = response.text || '{}';
-    const datos = JSON.parse(textoJson);
+    const datos = JSON.parse(response.text || '{}');
 
     if (!datos.es_ine_valida) {
       return res.status(400).json({
@@ -216,12 +229,12 @@ app.post('/api/ine/escanear', async (req, res) => {
     const textoErr = String(error?.message || '');
     if (textoErr.includes('503') || textoErr.includes('UNAVAILABLE') || textoErr.includes('high demand')) {
       return res.status(503).json({
-        error: 'Los servidores de IA tienen alta demanda en este momento. Espera 5 segundos y vuelve a intentar.'
+        error: 'Los servidores de IA tienen alta demanda en este momento. Intenta de nuevo en unos segundos.'
       });
     }
     if (textoErr.includes('429') || textoErr.includes('RESOURCE_EXHAUSTED')) {
       return res.status(429).json({
-        error: 'Se alcanzó el límite de escaneos por minuto. Espera 15 segundos e intenta de nuevo.'
+        error: 'Límite de peticiones alcanzado. Espera unos segundos e intenta de nuevo.'
       });
     }
     return res.status(500).json({
