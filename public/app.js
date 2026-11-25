@@ -90,9 +90,13 @@ function navegarA(idSeccion, titulo) {
   if (idSeccion === 'sec-avance-promotores') {
     Promise.all([cargarPromotores(), cargarSimpatizantes()]).then(renderizarAvancePromotores);
   }
-  if (idSeccion === 'sec-simpatizantes') cargarSimpatizantes();
+  if (idSeccion === 'sec-simpatizantes') {
+    Promise.all([cargarSimpatizantes(), cargarPromotores()]);
+  }
   if (idSeccion === 'sec-pase-lista') cargarSimpatizantes();
-  if (idSeccion === 'sec-promotores') cargarPromotores();
+  if (idSeccion === 'sec-promotores') {
+    Promise.all([cargarPromotores(), cargarSimpatizantes()]);
+  }
   if (idSeccion === 'sec-estructura') {
     cargarEstructura();
     renderizarChipsSeccionesEstructura();
@@ -299,11 +303,14 @@ function iniciarSesionUI() {
     document.getElementById('modal-password').classList.remove('oculto');
   }
 
+  // Mostrar todos los botones antes de aplicar restricciones por rol
+  document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
+    btn.classList.remove('oculto');
+  });
+
   const menuUsuarios = document.getElementById('menu-usuarios');
   if (usuarioActual.rol !== 'admin') {
     menuUsuarios.classList.add('oculto');
-  } else {
-    menuUsuarios.classList.remove('oculto');
   }
 
   if (usuarioActual.rol === 'pase_lista') {
@@ -312,6 +319,13 @@ function iniciarSesionUI() {
     });
     cargarSimpatizantes();
     navegarA('sec-pase-lista', `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`);
+  } else if (usuarioActual.rol === 'capturista') {
+    const vistasCapturista = new Set(['sec-simpatizantes', 'sec-promotores']);
+    document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
+      if (!vistasCapturista.has(btn.dataset.vista)) btn.classList.add('oculto');
+    });
+    Promise.all([cargarSimpatizantes(), cargarPromotores()]);
+    navegarA('sec-simpatizantes', 'Simpatizantes');
   } else {
     cargarTodo();
     navegarA('sec-avances', 'Avances y Resumen General');
@@ -348,6 +362,9 @@ async function cargarAvances() {
 }
 
 function renderizarAvances() {
+  const tbody = document.getElementById('tabla-avances-body');
+  if (!tbody) return;
+
   const mapaAvances = new Map(cacheAvances.map(a => [a.seccion, a]));
   const fSec = (document.getElementById('filtro-avances-seccion').value || '').trim();
   const fEst = document.getElementById('filtro-avances-estado').value;
@@ -373,7 +390,6 @@ function renderizarAvances() {
   document.getElementById('kpi-secciones').textContent = `${seccionesActivas} / 60`;
   document.getElementById('barra-secciones-activas').style.width = `${pctSecciones}%`;
 
-  const tbody = document.getElementById('tabla-avances-body');
   const lista = SECCIONES_CUNDUACAN.filter(sec => {
     const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
     if (fSec && !sec.includes(fSec)) return false;
@@ -551,6 +567,9 @@ async function cargarSimpatizantes() {
 }
 
 function renderizarSimpatizantes() {
+  const tbody = document.getElementById('tabla-simpatizantes-body');
+  if (!tbody) return;
+
   const fSec = (document.getElementById('filtro-simp-seccion').value || '').trim();
   const fBusq = (document.getElementById('filtro-simp-busqueda').value || '').trim().toUpperCase();
   const fAsis = document.getElementById('filtro-simp-asistencia').value;
@@ -567,7 +586,6 @@ function renderizarSimpatizantes() {
   });
 
   document.getElementById('contador-simpatizantes').textContent = filtrados.length;
-  const tbody = document.getElementById('tabla-simpatizantes-body');
 
   tbody.innerHTML = filtrados.map(s => `
     <tr>
@@ -590,6 +608,9 @@ function renderizarSimpatizantes() {
 }
 
 function renderizarPaseLista() {
+  const tbody = document.getElementById('tabla-pase-lista-body');
+  if (!tbody) return;
+
   const fSec = (document.getElementById('pl-filtro-seccion').value || '').trim();
   const fNom = (document.getElementById('pl-filtro-nombre').value || '').trim().toUpperCase();
   const fEst = document.getElementById('pl-filtro-estado').value;
@@ -607,7 +628,6 @@ function renderizarPaseLista() {
   document.getElementById('pl-asistieron').textContent = asistieron;
   document.getElementById('pl-pendientes').textContent = filtrados.length - asistieron;
 
-  const tbody = document.getElementById('tabla-pase-lista-body');
   tbody.innerHTML = filtrados.map(s => `
     <tr>
       <td>
@@ -653,7 +673,7 @@ async function guardarSimpatizante(e) {
   if (res.ok) {
     resetFormSimpatizante();
     await cargarSimpatizantes();
-    await cargarAvances();
+    if (usuarioActual?.rol === 'admin') await cargarAvances();
   } else {
     alert('Error al guardar simpatizante.');
   }
@@ -693,7 +713,7 @@ async function toggleAsistencia(id, asistio) {
   if (item) item.asistio = asistio;
   renderizarSimpatizantes();
   renderizarPaseLista();
-  cargarAvances();
+  if (usuarioActual?.rol === 'admin') cargarAvances();
 }
 
 async function eliminarSimpatizante(id) {
@@ -701,7 +721,7 @@ async function eliminarSimpatizante(id) {
   const res = await fetch(`/api/simpatizantes/${id}`, { method: 'DELETE' });
   if (res.ok) {
     await cargarSimpatizantes();
-    await cargarAvances();
+    if (usuarioActual?.rol === 'admin') await cargarAvances();
   }
 }
 
@@ -769,7 +789,7 @@ async function importarExcelSimpatizantes(e) {
   alert(data.mensaje || data.error);
   e.target.value = '';
   await cargarSimpatizantes();
-  await cargarAvances();
+  if (usuarioActual?.rol === 'admin') await cargarAvances();
 }
 
 // ==========================================
@@ -850,7 +870,7 @@ async function guardarPromotor(e) {
   if (res.ok) {
     resetFormPromotor();
     await cargarPromotores();
-    renderizarAvances();
+    if (usuarioActual?.rol === 'admin') renderizarAvances();
   } else {
     alert('Error al guardar promotor.');
   }
@@ -882,7 +902,7 @@ async function eliminarPromotor(id) {
   const res = await fetch(`/api/promotores/${id}`, { method: 'DELETE' });
   if (res.ok) {
     await cargarPromotores();
-    renderizarAvances();
+    if (usuarioActual?.rol === 'admin') renderizarAvances();
   }
 }
 
@@ -990,6 +1010,9 @@ async function cargarEstructura() {
 }
 
 function renderizarEstructura() {
+  const tbody = document.getElementById('tabla-estructura-body');
+  if (!tbody) return;
+
   const zonasCubiertas = new Set(cacheEstructura.map(e => Number(e.zona)).filter(Boolean));
   const rutasCubiertas = new Set(cacheEstructura.map(e => Number(e.ruta)).filter(Boolean));
   const seccionesCubiertas = new Set();
@@ -1018,7 +1041,6 @@ function renderizarEstructura() {
   });
 
   document.getElementById('contador-estructura').textContent = filtrados.length;
-  const tbody = document.getElementById('tabla-estructura-body');
 
   tbody.innerHTML = filtrados.map(e => `
     <tr>
@@ -1154,6 +1176,7 @@ async function cargarUsuarios() {
   if (!res.ok) return;
   const usuarios = await res.json();
   const tbody = document.getElementById('tabla-usuarios-body');
+  if (!tbody) return;
   tbody.innerHTML = usuarios.map(u => `
     <tr>
       <td><strong>${u.usuario}</strong></td>

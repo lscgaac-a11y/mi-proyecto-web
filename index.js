@@ -629,6 +629,7 @@ app.delete('/api/estructura/:id', async (req, res) => {
   }
 });
 
+// Ruta fallback compatible con Express 4 y 5
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
