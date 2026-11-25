@@ -271,7 +271,7 @@ function configurarListenerCamaraINE() {
       }
 
       const { nombres, apellidos, curp, clave_elector, seccion, localidad, es_seccion_cunduacan } = data.datos;
-      const nombreCompleto = `${nombres || ''} ${apellidos || ''}`.trim();
+      const nombreCompleto = `${apellidos || ''} ${nombres || ''}`.trim();
 
       if (destino === 'simpatizante') {
         asignarValor('simp-nombre', nombreCompleto);
@@ -897,12 +897,12 @@ function descargarPlantillaSimpatizantes() {
   const ejemplo = [
     {
       Seccion: '0615',
-      Nombre: 'JUAN PEREZ LOPEZ',
+      Nombre: 'PEREZ LOPEZ JUAN',
       CURP: 'PELJ850412HTCRRN09',
       Clave_Elector: 'PRLPJN85041227H100',
       Telefono: '9141234567',
       Localidad: 'R/A. HUIMANGO 1RA',
-      Referencia: 'MARIA GOMEZ',
+      Referencia: 'GOMEZ MARIA',
       Asistio: 'NO'
     }
   ];
