@@ -727,7 +727,6 @@ function renderizarAvancePromotores() {
                 <th>#</th>
                 <th>Sección</th>
                 <th>Nombre Completo</th>
-                <th>CURP</th>
                 <th>Teléfono</th>
                 <th>Localidad / Dirección</th>
                 <th>Status de Participación</th>
@@ -739,7 +738,6 @@ function renderizarAvancePromotores() {
                   <td><strong>${idx + 1}</strong></td>
                   <td><span class="badge badge-morado">${s.seccion}</span></td>
                   <td><strong>${s.nombre}</strong></td>
-                  <td style="font-family:monospace; font-size:0.82rem;">${s.curp || '-'}</td>
                   <td>${s.telefono || '-'}</td>
                   <td>${s.localidad || '-'}</td>
                   <td>
@@ -800,7 +798,6 @@ function exportarExcelAvancePromotores() {
         No: 0,
         Simpatizante: 'SIN REGISTROS',
         Seccion_Simpatizante: '',
-        CURP: '',
         Telefono: '',
         Localidad: '',
         Status_Participacion: ''
@@ -813,7 +810,6 @@ function exportarExcelAvancePromotores() {
           No: idx + 1,
           Simpatizante: s.nombre,
           Seccion_Simpatizante: s.seccion,
-          CURP: s.curp || '',
           Telefono: s.telefono || '',
           Localidad: s.localidad || '',
           Status_Participacion: s.asistio ? 'PARTICIPO' : 'PENDIENTE'
@@ -894,7 +890,7 @@ function exportarPDFAvancePromotores() {
           `   • ${s.nombre}`,
           s.telefono || '-',
           s.localidad || '-',
-          s.curp || '-',
+          '',
           '',
           s.asistio ? 'PARTICIPÓ' : 'PENDIENTE'
         ]);
@@ -904,7 +900,7 @@ function exportarPDFAvancePromotores() {
   });
 
   doc.autoTable({
-    head: [['Sección / #', 'Promotor / Simpatizante', 'Teléfono', 'Localidad / Dirección', 'Meta / CURP', 'Faltantes', 'Avance / Participación']],
+    head: [['Sección / #', 'Promotor / Simpatizante', 'Teléfono', 'Localidad / Dirección', 'Meta', 'Faltantes', 'Avance / Participación']],
     body: filasCuerpo,
     startY: 27,
     theme: 'grid',
