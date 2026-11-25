@@ -50,6 +50,27 @@ function normalizarSeccion(sec) {
   return digitos ? digitos.padStart(4, '0') : '';
 }
 
+function limpiarDireccionINE(dir) {
+  let texto = normalizarTexto(dir)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  // Eliminar C.P. o código postal de 5 dígitos
+  texto = texto
+    .replace(/\bC\.?\s*P\.?\s*\d{5}\b/g, ' ')
+    .replace(/(?:^|[\s,])\d{5}(?=[\s,]|$)/g, ' ');
+
+  // Eliminar municipio y estado únicamente si aparecen al final de la dirección
+  texto = texto
+    .replace(/(?:,\s*|\s+)(?:CUNDUACAN\s*,?\s*)?(?:TABASCO|TAB\.?)\s*$/g, '')
+    .replace(/(?:,\s*|\s+)CUNDUACAN\s*$/g, '');
+
+  return texto
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[,.\s-]+|[,.\s-]+$/g, '')
+    .trim();
+}
+
 function esperar(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -173,7 +194,8 @@ app.post('/api/ine/escanear', async (req, res) => {
       'es_ine_valida (boolean), apellidos (mayúsculas sin acentos), nombres (mayúsculas sin acentos), ' +
       'curp (18 caracteres alfanuméricos en mayúsculas sin espacios), ' +
       'clave_elector (18 caracteres alfanuméricos en mayúsculas sin espacios), ' +
-      'seccion (4 dígitos), localidad (colonia, ranchería o poblado sin CP ni municipio).';
+      'seccion (4 dígitos), ' +
+      'localidad (dirección completa del domicilio: calle, número exterior/interior, manzana/lote, carretera/km y colonia, ranchería, ejido o poblado en mayúsculas sin acentos; EXCLUYE únicamente el código postal de 5 dígitos, el municipio y el estado).';
 
     const response = await generarRapidoConReintentos(ai, {
       model: 'gemini-3.8-flash',
@@ -231,7 +253,7 @@ app.post('/api/ine/escanear', async (req, res) => {
         curp: normalizarCodigoINE(datos.curp),
         clave_elector: normalizarCodigoINE(datos.clave_elector),
         seccion: seccionNorm,
-        localidad: normalizarTexto(datos.localidad),
+        localidad: limpiarDireccionINE(datos.localidad),
         es_seccion_cunduacan: esSeccionCunduacan
       }
     });
