@@ -14,8 +14,81 @@ let cacheAvances = [];
 let cacheSimpatizantes = [];
 let cachePromotores = [];
 let cacheEstructura = [];
+let cacheUsuarios = [];
 let seccionesSeleccionadasEst = new Set();
 let destinoINEActual = null;
+
+function esSuperUsuario() {
+  return usuarioActual && usuarioActual.rol === 'admin';
+}
+
+// ==========================================
+// GENERADOR DE REPORTES PDF (ESTILO INSTITUCIONAL)
+// ==========================================
+function generarPDFTabla({ titulo, subtitulo, columnas, filas, nombreArchivo, orientacion = 'landscape' }) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('La librería PDF aún está cargando. Intenta de nuevo en un segundo.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: orientacion, unit: 'mm', format: 'letter' });
+  const fechaHora = new Date().toLocaleString('es-MX', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  });
+
+  doc.setFillColor(59, 7, 100);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 22, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Cunduacán 2027 · ${titulo}`, 14, 10);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${subtitulo}  |  Registros: ${filas.length}  |  Generado: ${fechaHora}`, 14, 17);
+
+  doc.autoTable({
+    head: [columnas],
+    body: filas,
+    startY: 27,
+    theme: 'grid',
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.5,
+      textColor: [31, 41, 55],
+      lineColor: [233, 213, 255],
+      lineWidth: 0.2
+    },
+    headStyles: {
+      fillColor: [107, 33, 168],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8
+    },
+    alternateRowStyles: {
+      fillColor: [250, 247, 255]
+    },
+    margin: { left: 14, right: 14, bottom: 16 },
+    didDrawPage: (data) => {
+      const totalPaginas = doc.internal.getNumberOfPages();
+      const altoPagina = doc.internal.pageSize.getHeight();
+      const anchoPagina = doc.internal.pageSize.getWidth();
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128);
+      doc.text(
+        `Organización Territorial Cunduacán · Página ${data.pageNumber} de ${totalPaginas}`,
+        anchoPagina - 14,
+        altoPagina - 7,
+        { align: 'right' }
+      );
+    }
+  });
+
+  doc.save(nombreArchivo);
+}
 
 // ==========================================
 // INICIALIZACIÓN
@@ -101,7 +174,7 @@ function navegarA(idSeccion, titulo) {
     cargarEstructura();
     renderizarChipsSeccionesEstructura();
   }
-  if (idSeccion === 'sec-usuarios' && usuarioActual?.rol === 'admin') cargarUsuarios();
+  if (idSeccion === 'sec-usuarios' && esSuperUsuario()) cargarUsuarios();
 }
 
 // ==========================================
@@ -239,7 +312,7 @@ function configurarListenerCamaraINE() {
 }
 
 // ==========================================
-// LOGIN Y SESIÓN
+// LOGIN Y SESIÓN (SUPER USUARIO ADMIN)
 // ==========================================
 function configurarEventosFormularios() {
   document.getElementById('form-login').addEventListener('submit', async (e) => {
@@ -294,22 +367,25 @@ function iniciarSesionUI() {
   document.getElementById('vista-app').classList.remove('oculto');
 
   document.getElementById('sidebar-nombre-usuario').textContent = usuarioActual.usuario;
-  document.getElementById('sidebar-rol-usuario').textContent =
-    usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada
-      ? `Pase de Lista · Sec. ${usuarioActual.seccion_asignada}`
-      : usuarioActual.rol;
+  if (esSuperUsuario()) {
+    document.getElementById('sidebar-rol-usuario').textContent = 'SUPER USUARIO · ADMIN';
+  } else if (usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada) {
+    document.getElementById('sidebar-rol-usuario').textContent = `Pase de Lista · Sec. ${usuarioActual.seccion_asignada}`;
+  } else {
+    document.getElementById('sidebar-rol-usuario').textContent = usuarioActual.rol;
+  }
 
   if (usuarioActual.requiere_cambio) {
     document.getElementById('modal-password').classList.remove('oculto');
   }
 
-  // Mostrar todos los botones antes de aplicar restricciones por rol
+  // Habilitar todas las opciones del menú antes de aplicar permisos
   document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
     btn.classList.remove('oculto');
   });
 
   const menuUsuarios = document.getElementById('menu-usuarios');
-  if (usuarioActual.rol !== 'admin') {
+  if (!esSuperUsuario()) {
     menuUsuarios.classList.add('oculto');
   }
 
@@ -327,6 +403,7 @@ function iniciarSesionUI() {
     Promise.all([cargarSimpatizantes(), cargarPromotores()]);
     navegarA('sec-simpatizantes', 'Simpatizantes');
   } else {
+    // Super Usuario (admin): acceso total a todos los módulos y funciones
     cargarTodo();
     navegarA('sec-avances', 'Avances y Resumen General');
   }
@@ -347,7 +424,7 @@ async function cargarTodo() {
   ]);
   renderizarAvances();
   renderizarAvancePromotores();
-  if (usuarioActual?.rol === 'admin') cargarUsuarios();
+  if (esSuperUsuario()) cargarUsuarios();
 }
 
 // ==========================================
@@ -361,13 +438,45 @@ async function cargarAvances() {
   }
 }
 
+function obtenerFilasAvances() {
+  const mapaAvances = new Map(cacheAvances.map(a => [a.seccion, a]));
+  const fSec = (document.getElementById('filtro-avances-seccion')?.value || '').trim();
+  const fEst = document.getElementById('filtro-avances-estado')?.value || 'todas';
+
+  return SECCIONES_CUNDUACAN
+    .filter(sec => {
+      const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
+      if (fSec && !sec.includes(fSec)) return false;
+      if (fEst === 'con' && dato.total_registrados === 0) return false;
+      if (fEst === 'sin' && dato.total_registrados > 0) return false;
+      return true;
+    })
+    .map(sec => {
+      const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
+      const pendientes = Math.max(0, dato.total_registrados - dato.total_asistieron);
+      const pct = dato.total_registrados > 0
+        ? ((dato.total_asistieron / dato.total_registrados) * 100).toFixed(1)
+        : '0.0';
+      const promsSec = cachePromotores.filter(p => p.seccion === sec).length;
+      const coordSec = cacheEstructura.find(
+        e => e.rol === 'Coordinador de Sección' && String(e.seccion).split(',').map(s => s.trim()).includes(sec)
+      );
+
+      return {
+        seccion: sec,
+        coordinador: coordSec ? `${coordSec.nombres} ${coordSec.apellidos}` : 'Sin asignar',
+        promotores: promsSec,
+        registrados: dato.total_registrados,
+        asistieron: dato.total_asistieron,
+        pendientes,
+        pct
+      };
+    });
+}
+
 function renderizarAvances() {
   const tbody = document.getElementById('tabla-avances-body');
   if (!tbody) return;
-
-  const mapaAvances = new Map(cacheAvances.map(a => [a.seccion, a]));
-  const fSec = (document.getElementById('filtro-avances-seccion').value || '').trim();
-  const fEst = document.getElementById('filtro-avances-estado').value;
 
   let totalReg = 0;
   let totalAsis = 0;
@@ -390,62 +499,58 @@ function renderizarAvances() {
   document.getElementById('kpi-secciones').textContent = `${seccionesActivas} / 60`;
   document.getElementById('barra-secciones-activas').style.width = `${pctSecciones}%`;
 
-  const lista = SECCIONES_CUNDUACAN.filter(sec => {
-    const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
-    if (fSec && !sec.includes(fSec)) return false;
-    if (fEst === 'con' && dato.total_registrados === 0) return false;
-    if (fEst === 'sin' && dato.total_registrados > 0) return false;
-    return true;
-  });
-
-  tbody.innerHTML = lista.map(sec => {
-    const dato = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
-    const pendientes = Math.max(0, dato.total_registrados - dato.total_asistieron);
-    const pct = dato.total_registrados > 0
-      ? ((dato.total_asistieron / dato.total_registrados) * 100).toFixed(1)
-      : '0.0';
-
-    const promsSec = cachePromotores.filter(p => p.seccion === sec).length;
-    const coordSec = cacheEstructura.find(
-      e => e.rol === 'Coordinador de Sección' && String(e.seccion).split(',').map(s => s.trim()).includes(sec)
-    );
-
-    return `
-      <tr>
-        <td><span class="badge badge-morado">${sec}</span></td>
-        <td>${coordSec ? `${coordSec.nombres} ${coordSec.apellidos}` : '<span style="color:#9ca3af;">Sin asignar</span>'}</td>
-        <td>${promsSec}</td>
-        <td><strong>${dato.total_registrados}</strong></td>
-        <td style="color:var(--verde); font-weight:700;">${dato.total_asistieron}</td>
-        <td>${pendientes}</td>
-        <td>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <div class="progreso-wrap" style="margin-top:0;"><div class="progreso-barra verde" style="width:${pct}%;"></div></div>
-            <span style="font-size:0.82rem; font-weight:700;">${pct}%</span>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+  const filas = obtenerFilasAvances();
+  tbody.innerHTML = filas.map(r => `
+    <tr>
+      <td><span class="badge badge-morado">${r.seccion}</span></td>
+      <td>${r.coordinador === 'Sin asignar' ? '<span style="color:#9ca3af;">Sin asignar</span>' : r.coordinador}</td>
+      <td>${r.promotores}</td>
+      <td><strong>${r.registrados}</strong></td>
+      <td style="color:var(--verde); font-weight:700;">${r.asistieron}</td>
+      <td>${r.pendientes}</td>
+      <td>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="progreso-wrap" style="margin-top:0;"><div class="progreso-barra verde" style="width:${r.pct}%;"></div></div>
+          <span style="font-size:0.82rem; font-weight:700;">${r.pct}%</span>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
 function exportarExcelAvances() {
-  const mapaAvances = new Map(cacheAvances.map(a => [a.seccion, a]));
-  const filas = SECCIONES_CUNDUACAN.map(sec => {
-    const d = mapaAvances.get(sec) || { total_registrados: 0, total_asistieron: 0 };
-    const pct = d.total_registrados > 0 ? ((d.total_asistieron / d.total_registrados) * 100).toFixed(1) + '%' : '0%';
-    return {
-      Seccion: sec,
-      Registrados: d.total_registrados,
-      Asistieron: d.total_asistieron,
-      Pendientes: Math.max(0, d.total_registrados - d.total_asistieron),
-      Avance: pct
-    };
-  });
+  const filas = obtenerFilasAvances().map(r => ({
+    Seccion: r.seccion,
+    Coordinador: r.coordinador,
+    Promotores: r.promotores,
+    Registrados: r.registrados,
+    Asistieron: r.asistieron,
+    Pendientes: r.pendientes,
+    Avance: `${r.pct}%`
+  }));
   const ws = XLSX.utils.json_to_sheet(filas);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Avances_60_Secciones');
   XLSX.writeFile(wb, 'Avances_Secciones_Cunduacan_2027.xlsx');
+}
+
+function exportarPDFAvances() {
+  const filas = obtenerFilasAvances().map(r => [
+    r.seccion,
+    r.coordinador,
+    String(r.promotores),
+    String(r.registrados),
+    String(r.asistieron),
+    String(r.pendientes),
+    `${r.pct}%`
+  ]);
+  generarPDFTabla({
+    titulo: 'Avances y Resumen General por Sección',
+    subtitulo: 'Desglose de las 60 secciones electorales',
+    columnas: ['Sección', 'Coordinador de Sección', 'Promotores', 'Registrados', 'Asistieron', 'Pendientes', '% Asistencia'],
+    filas,
+    nombreArchivo: 'Avances_Secciones_Cunduacan_2027.pdf'
+  });
 }
 
 // ==========================================
@@ -473,6 +578,24 @@ function calcularEstadisticasPromotores() {
   });
 }
 
+function obtenerAvancePromotoresFiltrados() {
+  const listaCompleta = calcularEstadisticasPromotores();
+  const fSec = (document.getElementById('filtro-ap-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-ap-busqueda')?.value || '').trim().toUpperCase();
+  const fEst = document.getElementById('filtro-ap-estado')?.value || 'todos';
+
+  return listaCompleta
+    .filter(p => {
+      if (fSec && !String(p.seccion).includes(fSec)) return false;
+      if (fBusq && !`${p.nombre} ${p.localidad}`.toUpperCase().includes(fBusq)) return false;
+      if (fEst === 'cumplida' && p.cantidad < META_SIMPATIZANTES_PROMOTOR) return false;
+      if (fEst === 'proceso' && (p.cantidad === 0 || p.cantidad >= META_SIMPATIZANTES_PROMOTOR)) return false;
+      if (fEst === 'cero' && p.cantidad > 0) return false;
+      return true;
+    })
+    .sort((a, b) => b.cantidad - a.cantidad || String(a.seccion).localeCompare(String(b.seccion)));
+}
+
 function renderizarAvancePromotores() {
   const tbody = document.getElementById('tabla-avance-promotores-body');
   if (!tbody) return;
@@ -490,20 +613,7 @@ function renderizarAvancePromotores() {
   document.getElementById('ap-kpi-porcentaje-global').textContent = `${pctGlobal}%`;
   document.getElementById('ap-barra-global').style.width = `${Math.min(100, Number(pctGlobal))}%`;
 
-  const fSec = (document.getElementById('filtro-ap-seccion')?.value || '').trim();
-  const fBusq = (document.getElementById('filtro-ap-busqueda')?.value || '').trim().toUpperCase();
-  const fEst = document.getElementById('filtro-ap-estado')?.value || 'todos';
-
-  const filtrados = listaCompleta
-    .filter(p => {
-      if (fSec && !String(p.seccion).includes(fSec)) return false;
-      if (fBusq && !`${p.nombre} ${p.localidad}`.toUpperCase().includes(fBusq)) return false;
-      if (fEst === 'cumplida' && p.cantidad < META_SIMPATIZANTES_PROMOTOR) return false;
-      if (fEst === 'proceso' && (p.cantidad === 0 || p.cantidad >= META_SIMPATIZANTES_PROMOTOR)) return false;
-      if (fEst === 'cero' && p.cantidad > 0) return false;
-      return true;
-    })
-    .sort((a, b) => b.cantidad - a.cantidad || String(a.seccion).localeCompare(String(b.seccion)));
+  const filtrados = obtenerAvancePromotoresFiltrados();
 
   tbody.innerHTML = filtrados.map(p => {
     const pctTexto = `${p.porcentaje.toFixed(1)}%`;
@@ -532,7 +642,7 @@ function renderizarAvancePromotores() {
 }
 
 function exportarExcelAvancePromotores() {
-  const filas = calcularEstadisticasPromotores().map(p => ({
+  const filas = obtenerAvancePromotoresFiltrados().map(p => ({
     Seccion: p.seccion,
     Promotor: p.nombre,
     Telefono: p.telefono || '',
@@ -546,6 +656,25 @@ function exportarExcelAvancePromotores() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Avance_Por_Promotor');
   XLSX.writeFile(wb, 'Avance_Por_Promotor_Cunduacan_2027.xlsx');
+}
+
+function exportarPDFAvancePromotores() {
+  const filas = obtenerAvancePromotoresFiltrados().map(p => [
+    p.seccion,
+    p.nombre,
+    p.telefono || '-',
+    p.localidad || '-',
+    `${p.cantidad} / ${META_SIMPATIZANTES_PROMOTOR}`,
+    p.faltantes === 0 ? 'Meta cumplida' : String(p.faltantes),
+    `${p.porcentaje.toFixed(1)}%`
+  ]);
+  generarPDFTabla({
+    titulo: 'Avance Individual por Promotor',
+    subtitulo: 'Meta base: 15 simpatizantes = 100%',
+    columnas: ['Sección', 'Promotor', 'Teléfono', 'Localidad', 'Simpatizantes', 'Faltantes', '% Avance'],
+    filas,
+    nombreArchivo: 'Avance_Por_Promotor_Cunduacan_2027.pdf'
+  });
 }
 
 // ==========================================
@@ -566,15 +695,12 @@ async function cargarSimpatizantes() {
   }
 }
 
-function renderizarSimpatizantes() {
-  const tbody = document.getElementById('tabla-simpatizantes-body');
-  if (!tbody) return;
+function obtenerSimpatizantesFiltrados() {
+  const fSec = (document.getElementById('filtro-simp-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-simp-busqueda')?.value || '').trim().toUpperCase();
+  const fAsis = document.getElementById('filtro-simp-asistencia')?.value || 'todos';
 
-  const fSec = (document.getElementById('filtro-simp-seccion').value || '').trim();
-  const fBusq = (document.getElementById('filtro-simp-busqueda').value || '').trim().toUpperCase();
-  const fAsis = document.getElementById('filtro-simp-asistencia').value;
-
-  const filtrados = cacheSimpatizantes.filter(s => {
+  return cacheSimpatizantes.filter(s => {
     if (fSec && !String(s.seccion).includes(fSec)) return false;
     if (fAsis === 'si' && !s.asistio) return false;
     if (fAsis === 'no' && s.asistio) return false;
@@ -584,7 +710,13 @@ function renderizarSimpatizantes() {
     }
     return true;
   });
+}
 
+function renderizarSimpatizantes() {
+  const tbody = document.getElementById('tabla-simpatizantes-body');
+  if (!tbody) return;
+
+  const filtrados = obtenerSimpatizantesFiltrados();
   document.getElementById('contador-simpatizantes').textContent = filtrados.length;
 
   tbody.innerHTML = filtrados.map(s => `
@@ -607,22 +739,25 @@ function renderizarSimpatizantes() {
   `).join('');
 }
 
-function renderizarPaseLista() {
-  const tbody = document.getElementById('tabla-pase-lista-body');
-  if (!tbody) return;
+function obtenerPaseListaFiltrado() {
+  const fSec = (document.getElementById('pl-filtro-seccion')?.value || '').trim();
+  const fNom = (document.getElementById('pl-filtro-nombre')?.value || '').trim().toUpperCase();
+  const fEst = document.getElementById('pl-filtro-estado')?.value || 'todos';
 
-  const fSec = (document.getElementById('pl-filtro-seccion').value || '').trim();
-  const fNom = (document.getElementById('pl-filtro-nombre').value || '').trim().toUpperCase();
-  const fEst = document.getElementById('pl-filtro-estado').value;
-
-  const filtrados = cacheSimpatizantes.filter(s => {
+  return cacheSimpatizantes.filter(s => {
     if (fSec && !String(s.seccion).includes(fSec)) return false;
     if (fEst === 'si' && !s.asistio) return false;
     if (fEst === 'no' && s.asistio) return false;
     if (fNom && !`${s.nombre} ${s.localidad}`.toUpperCase().includes(fNom)) return false;
     return true;
   });
+}
 
+function renderizarPaseLista() {
+  const tbody = document.getElementById('tabla-pase-lista-body');
+  if (!tbody) return;
+
+  const filtrados = obtenerPaseListaFiltrado();
   const asistieron = filtrados.filter(s => s.asistio).length;
   document.getElementById('pl-total').textContent = filtrados.length;
   document.getElementById('pl-asistieron').textContent = asistieron;
@@ -646,6 +781,39 @@ function renderizarPaseLista() {
       </td>
     </tr>
   `).join('');
+}
+
+function exportarExcelPaseLista() {
+  const datos = obtenerPaseListaFiltrado().map(s => ({
+    Estado: s.asistio ? 'ASISTIO' : 'PENDIENTE',
+    Seccion: s.seccion,
+    Nombre: s.nombre,
+    CURP: s.curp || '',
+    Clave_Elector: s.clave_elector || '',
+    Localidad: s.localidad || '',
+    Referencia: s.referencia || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(datos);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Pase_de_Lista');
+  XLSX.writeFile(wb, 'Pase_de_Lista_Cunduacan_2027.xlsx');
+}
+
+function exportarPDFPaseLista() {
+  const filas = obtenerPaseListaFiltrado().map(s => [
+    s.asistio ? 'ASISTIÓ' : 'PENDIENTE',
+    s.seccion,
+    s.nombre,
+    s.localidad || '-',
+    s.referencia || '-'
+  ]);
+  generarPDFTabla({
+    titulo: 'Pase de Lista · Control de Asistencia',
+    subtitulo: 'Padrón de verificación territorial',
+    columnas: ['Estado', 'Sección', 'Nombre Completo', 'Localidad', 'Promotor / Referencia'],
+    filas,
+    nombreArchivo: 'Pase_de_Lista_Cunduacan_2027.pdf'
+  });
 }
 
 async function guardarSimpatizante(e) {
@@ -673,7 +841,7 @@ async function guardarSimpatizante(e) {
   if (res.ok) {
     resetFormSimpatizante();
     await cargarSimpatizantes();
-    if (usuarioActual?.rol === 'admin') await cargarAvances();
+    if (esSuperUsuario()) await cargarAvances();
   } else {
     alert('Error al guardar simpatizante.');
   }
@@ -713,7 +881,7 @@ async function toggleAsistencia(id, asistio) {
   if (item) item.asistio = asistio;
   renderizarSimpatizantes();
   renderizarPaseLista();
-  if (usuarioActual?.rol === 'admin') cargarAvances();
+  if (esSuperUsuario()) cargarAvances();
 }
 
 async function eliminarSimpatizante(id) {
@@ -721,7 +889,7 @@ async function eliminarSimpatizante(id) {
   const res = await fetch(`/api/simpatizantes/${id}`, { method: 'DELETE' });
   if (res.ok) {
     await cargarSimpatizantes();
-    if (usuarioActual?.rol === 'admin') await cargarAvances();
+    if (esSuperUsuario()) await cargarAvances();
   }
 }
 
@@ -745,7 +913,7 @@ function descargarPlantillaSimpatizantes() {
 }
 
 function exportarExcelSimpatizantes() {
-  const datos = cacheSimpatizantes.map(s => ({
+  const datos = obtenerSimpatizantesFiltrados().map(s => ({
     Seccion: s.seccion,
     Nombre: s.nombre,
     CURP: s.curp || '',
@@ -759,6 +927,26 @@ function exportarExcelSimpatizantes() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Simpatizantes');
   XLSX.writeFile(wb, 'Simpatizantes_Cunduacan_2027.xlsx');
+}
+
+function exportarPDFSimpatizantes() {
+  const filas = obtenerSimpatizantesFiltrados().map(s => [
+    s.seccion,
+    s.nombre,
+    s.curp || '-',
+    s.clave_elector || '-',
+    s.telefono || '-',
+    s.localidad || '-',
+    s.referencia || '-',
+    s.asistio ? 'SÍ' : 'NO'
+  ]);
+  generarPDFTabla({
+    titulo: 'Base de Datos de Simpatizantes',
+    subtitulo: 'Padrón electoral municipal',
+    columnas: ['Sección', 'Nombre Completo', 'CURP', 'Clave de Elector', 'Teléfono', 'Localidad', 'Promotor / Ref.', 'Asistió'],
+    filas,
+    nombreArchivo: 'Simpatizantes_Cunduacan_2027.pdf'
+  });
 }
 
 async function importarExcelSimpatizantes(e) {
@@ -789,7 +977,7 @@ async function importarExcelSimpatizantes(e) {
   alert(data.mensaje || data.error);
   e.target.value = '';
   await cargarSimpatizantes();
-  if (usuarioActual?.rol === 'admin') await cargarAvances();
+  if (esSuperUsuario()) await cargarAvances();
 }
 
 // ==========================================
@@ -811,19 +999,22 @@ function actualizarDatalistPromotores() {
   dl.innerHTML = cachePromotores.map(p => `<option value="${p.nombre}"></option>`).join('');
 }
 
-function renderizarPromotores() {
-  const tbody = document.getElementById('tabla-promotores-body');
-  if (!tbody) return;
+function obtenerPromotoresFiltrados() {
+  const fSec = (document.getElementById('filtro-prom-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-prom-busqueda')?.value || '').trim().toUpperCase();
 
-  const fSec = (document.getElementById('filtro-prom-seccion').value || '').trim();
-  const fBusq = (document.getElementById('filtro-prom-busqueda').value || '').trim().toUpperCase();
-
-  const filtrados = cachePromotores.filter(p => {
+  return cachePromotores.filter(p => {
     if (fSec && !String(p.seccion).includes(fSec)) return false;
     if (fBusq && !`${p.nombre} ${p.localidad}`.toUpperCase().includes(fBusq)) return false;
     return true;
   });
+}
 
+function renderizarPromotores() {
+  const tbody = document.getElementById('tabla-promotores-body');
+  if (!tbody) return;
+
+  const filtrados = obtenerPromotoresFiltrados();
   document.getElementById('contador-promotores').textContent = filtrados.length;
 
   tbody.innerHTML = filtrados.map(p => {
@@ -870,7 +1061,7 @@ async function guardarPromotor(e) {
   if (res.ok) {
     resetFormPromotor();
     await cargarPromotores();
-    if (usuarioActual?.rol === 'admin') renderizarAvances();
+    if (esSuperUsuario()) renderizarAvances();
   } else {
     alert('Error al guardar promotor.');
   }
@@ -902,21 +1093,51 @@ async function eliminarPromotor(id) {
   const res = await fetch(`/api/promotores/${id}`, { method: 'DELETE' });
   if (res.ok) {
     await cargarPromotores();
-    if (usuarioActual?.rol === 'admin') renderizarAvances();
+    if (esSuperUsuario()) renderizarAvances();
   }
 }
 
 function exportarExcelPromotores() {
-  const datos = cachePromotores.map(p => ({
-    Seccion: p.seccion,
-    Nombre: p.nombre,
-    Telefono: p.telefono || '',
-    Localidad: p.localidad || ''
-  }));
+  const datos = obtenerPromotoresFiltrados().map(p => {
+    const nombreProm = String(p.nombre || '').trim().toUpperCase();
+    const totalReferidos = cacheSimpatizantes.filter(
+      s => String(s.referencia || '').trim().toUpperCase() === nombreProm
+    ).length;
+    return {
+      Seccion: p.seccion,
+      Nombre: p.nombre,
+      Telefono: p.telefono || '',
+      Localidad: p.localidad || '',
+      Simpatizantes: totalReferidos
+    };
+  });
   const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Promotores');
   XLSX.writeFile(wb, 'Promotores_Cunduacan_2027.xlsx');
+}
+
+function exportarPDFPromotores() {
+  const filas = obtenerPromotoresFiltrados().map(p => {
+    const nombreProm = String(p.nombre || '').trim().toUpperCase();
+    const totalReferidos = cacheSimpatizantes.filter(
+      s => String(s.referencia || '').trim().toUpperCase() === nombreProm
+    ).length;
+    return [
+      p.seccion,
+      p.nombre,
+      p.telefono || '-',
+      p.localidad || '-',
+      `${totalReferidos} / ${META_SIMPATIZANTES_PROMOTOR}`
+    ];
+  });
+  generarPDFTabla({
+    titulo: 'Base de Datos de Promotores',
+    subtitulo: 'Red de promoción territorial',
+    columnas: ['Sección', 'Nombre del Promotor', 'Teléfono', 'Localidad', 'Simpatizantes'],
+    filas,
+    nombreArchivo: 'Promotores_Cunduacan_2027.pdf'
+  });
 }
 
 async function importarExcelPromotores(e) {
@@ -1009,6 +1230,19 @@ async function cargarEstructura() {
   }
 }
 
+function obtenerEstructuraFiltrada() {
+  const fZona = document.getElementById('filtro-est-zona')?.value || '';
+  const fRol = document.getElementById('filtro-est-rol')?.value || '';
+  const fBusq = (document.getElementById('filtro-est-busqueda')?.value || '').trim().toUpperCase();
+
+  return cacheEstructura.filter(e => {
+    if (fZona && String(e.zona) !== fZona) return false;
+    if (fRol && e.rol !== fRol) return false;
+    if (fBusq && !`${e.nombres} ${e.apellidos} ${e.seccion} ${e.localidad}`.toUpperCase().includes(fBusq)) return false;
+    return true;
+  });
+}
+
 function renderizarEstructura() {
   const tbody = document.getElementById('tabla-estructura-body');
   if (!tbody) return;
@@ -1029,17 +1263,7 @@ function renderizarEstructura() {
   document.getElementById('est-kpi-secciones').textContent = `${seccionesCubiertas.size} / 60`;
   document.getElementById('est-barra-secciones').style.width = `${((seccionesCubiertas.size / 60) * 100).toFixed(1)}%`;
 
-  const fZona = document.getElementById('filtro-est-zona').value;
-  const fRol = document.getElementById('filtro-est-rol').value;
-  const fBusq = (document.getElementById('filtro-est-busqueda').value || '').trim().toUpperCase();
-
-  const filtrados = cacheEstructura.filter(e => {
-    if (fZona && String(e.zona) !== fZona) return false;
-    if (fRol && e.rol !== fRol) return false;
-    if (fBusq && !`${e.nombres} ${e.apellidos} ${e.seccion} ${e.localidad}`.toUpperCase().includes(fBusq)) return false;
-    return true;
-  });
-
+  const filtrados = obtenerEstructuraFiltrada();
   document.getElementById('contador-estructura').textContent = filtrados.length;
 
   tbody.innerHTML = filtrados.map(e => `
@@ -1142,7 +1366,7 @@ async function eliminarEstructura(id) {
 }
 
 function exportarExcelEstructura() {
-  const datos = cacheEstructura.map(e => ({
+  const datos = obtenerEstructuraFiltrada().map(e => ({
     Zona: e.zona,
     Ruta: e.ruta || '',
     Cargo: e.rol,
@@ -1158,8 +1382,27 @@ function exportarExcelEstructura() {
   XLSX.writeFile(wb, 'Estructura_Principal_Cunduacan_2027.xlsx');
 }
 
+function exportarPDFEstructura() {
+  const filas = obtenerEstructuraFiltrada().map(e => [
+    `Zona ${e.zona}`,
+    e.ruta ? `Ruta ${e.ruta}` : '-',
+    e.rol,
+    e.seccion,
+    `${e.nombres} ${e.apellidos}`,
+    e.telefono || '-',
+    e.localidad || '-'
+  ]);
+  generarPDFTabla({
+    titulo: 'Estructura Territorial Principal',
+    subtitulo: '20 Zonas · 37 Rutas · 60 Secciones',
+    columnas: ['Zona', 'Ruta', 'Cargo', 'Secciones', 'Nombre Completo', 'Teléfono', 'Localidad'],
+    filas,
+    nombreArchivo: 'Estructura_Principal_Cunduacan_2027.pdf'
+  });
+}
+
 // ==========================================
-// 5. USUARIOS / EQUIPO (SOLO ADMIN)
+// 5. USUARIOS / EQUIPO (SOLO SUPER USUARIO ADMIN)
 // ==========================================
 function toggleCampoSeccionUsuario() {
   const rol = document.getElementById('usu-rol').value;
@@ -1174,20 +1417,37 @@ function toggleCampoSeccionUsuario() {
 async function cargarUsuarios() {
   const res = await fetch('/api/usuarios');
   if (!res.ok) return;
-  const usuarios = await res.json();
+  cacheUsuarios = await res.json();
   const tbody = document.getElementById('tabla-usuarios-body');
   if (!tbody) return;
-  tbody.innerHTML = usuarios.map(u => `
+  tbody.innerHTML = cacheUsuarios.map(u => `
     <tr>
       <td><strong>${u.usuario}</strong></td>
       <td>${u.password}</td>
-      <td><span class="badge badge-morado">${u.rol}</span></td>
+      <td><span class="badge badge-morado">${u.rol === 'admin' ? 'admin (Super Usuario)' : u.rol}</span></td>
       <td>${u.seccion_asignada || '-'}</td>
-      <td>
+      <td class="no-print">
         ${u.usuario === 'admin' ? '' : `<button type="button" class="btn btn-sm btn-rojo" onclick="eliminarUsuario(${u.id})">Eliminar</button>`}
       </td>
     </tr>
   `).join('');
+}
+
+function exportarPDFUsuarios() {
+  const filas = cacheUsuarios.map(u => [
+    u.usuario,
+    u.password,
+    u.rol === 'admin' ? 'admin (Super Usuario)' : u.rol,
+    u.seccion_asignada || 'Todas'
+  ]);
+  generarPDFTabla({
+    titulo: 'Usuarios y Equipo del Sistema',
+    subtitulo: 'Control de accesos y roles',
+    columnas: ['Usuario', 'Contraseña', 'Rol', 'Sección Asignada'],
+    filas,
+    nombreArchivo: 'Usuarios_Sistema_Cunduacan_2027.pdf',
+    orientacion: 'portrait'
+  });
 }
 
 async function crearUsuario(e) {

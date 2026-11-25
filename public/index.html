@@ -6,6 +6,8 @@
   <title>Estructura Territorial · Cunduacán 2027</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
   <!-- Input oculto para cámara / archivo INE -->
@@ -69,7 +71,7 @@
 
       <div class="sidebar-user">
         <div id="sidebar-nombre-usuario" class="user-name">admin</div>
-        <div id="sidebar-rol-usuario" class="user-role">admin</div>
+        <div id="sidebar-rol-usuario" class="user-role">SUPER USUARIO · ADMIN</div>
       </div>
 
       <nav id="sidebar-menu" class="sidebar-menu">
@@ -142,7 +144,10 @@
         <div class="card">
           <div class="card-header-flex">
             <h3>Desglose por las 60 Secciones de Cunduacán</h3>
-            <button type="button" class="btn btn-sm btn-verde no-print" onclick="exportarExcelAvances()">📥 Exportar Excel</button>
+            <div class="acciones-excel no-print">
+              <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelAvances()">📥 Exportar Excel</button>
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFAvances()">📄 Exportar PDF</button>
+            </div>
           </div>
           <div class="filtros-bar no-print">
             <input type="text" id="filtro-avances-seccion" placeholder="Filtrar sección (ej. 0615)..." oninput="renderizarAvances()" />
@@ -201,7 +206,10 @@
               <h3>Avance Individual por Promotor (100% = 15 Simpatizantes)</h3>
               <p style="font-size:0.85rem; color:#6b7280; margin-top:4px;">Contabiliza los simpatizantes registrados con el nombre del promotor en el campo Referencia.</p>
             </div>
-            <button type="button" class="btn btn-sm btn-verde no-print" onclick="exportarExcelAvancePromotores()">📥 Exportar Excel</button>
+            <div class="acciones-excel no-print">
+              <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelAvancePromotores()">📥 Exportar Excel</button>
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFAvancePromotores()">📄 Exportar PDF</button>
+            </div>
           </div>
 
           <div class="filtros-bar no-print">
@@ -295,6 +303,7 @@
                 <input type="file" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelSimpatizantes(event)" />
               </label>
               <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelSimpatizantes()">📥 Exportar Excel</button>
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFSimpatizantes()">📄 Exportar PDF</button>
             </div>
           </div>
 
@@ -349,6 +358,13 @@
         </div>
 
         <div class="card">
+          <div class="card-header-flex">
+            <h3>Control de Asistencia</h3>
+            <div class="acciones-excel no-print">
+              <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelPaseLista()">📥 Exportar Excel</button>
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFPaseLista()">📄 Exportar PDF</button>
+            </div>
+          </div>
           <div class="filtros-bar no-print">
             <input type="text" id="pl-filtro-seccion" placeholder="Sección..." oninput="renderizarPaseLista()" />
             <input type="text" id="pl-filtro-nombre" placeholder="Buscar por nombre o localidad..." oninput="renderizarPaseLista()" />
@@ -424,6 +440,7 @@
                 <input type="file" accept=".xlsx,.xls,.csv" class="oculto" onchange="importarExcelPromotores(event)" />
               </label>
               <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelPromotores()">📥 Exportar Excel</button>
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFPromotores()">📄 Exportar PDF</button>
             </div>
           </div>
 
@@ -530,7 +547,10 @@
         <div class="card">
           <div class="card-header-flex">
             <h3>Integrantes Registrados (<span id="contador-estructura">0</span>)</h3>
-            <button type="button" class="btn btn-sm btn-verde no-print" onclick="exportarExcelEstructura()">📥 Exportar Excel</button>
+            <div class="acciones-excel no-print">
+              <button type="button" class="btn btn-sm btn-verde" onclick="exportarExcelEstructura()">📥 Exportar Excel</button>
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFEstructura()">📄 Exportar PDF</button>
+            </div>
           </div>
           <div class="filtros-bar no-print">
             <select id="filtro-est-zona" onchange="renderizarEstructura()">
@@ -584,7 +604,7 @@
               <select id="usu-rol" onchange="toggleCampoSeccionUsuario()">
                 <option value="capturista">Capturista</option>
                 <option value="pase_lista">Pase de Lista (por sección)</option>
-                <option value="admin">Administrador</option>
+                <option value="admin">Administrador (Super Usuario)</option>
               </select>
             </div>
             <div class="campo oculto" id="grupo-usu-seccion">
@@ -598,7 +618,12 @@
         </div>
 
         <div class="card">
-          <h3>Usuarios Activos</h3>
+          <div class="card-header-flex">
+            <h3>Usuarios Activos</h3>
+            <div class="acciones-excel no-print">
+              <button type="button" class="btn btn-sm btn-rojo" onclick="exportarPDFUsuarios()">📄 Exportar PDF</button>
+            </div>
+          </div>
           <div class="tabla-wrap">
             <table>
               <thead>
@@ -607,7 +632,7 @@
                   <th>Contraseña</th>
                   <th>Rol</th>
                   <th>Sección Asignada</th>
-                  <th>Acciones</th>
+                  <th class="no-print">Acciones</th>
                 </tr>
               </thead>
               <tbody id="tabla-usuarios-body"></tbody>
