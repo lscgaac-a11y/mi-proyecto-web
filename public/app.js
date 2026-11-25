@@ -27,6 +27,10 @@ function esCapturista() {
   return usuarioActual && usuarioActual.rol === 'capturista';
 }
 
+function esPaseLista() {
+  return usuarioActual && usuarioActual.rol === 'pase_lista';
+}
+
 // ==========================================
 // GENERADOR DE REPORTES PDF (ESTILO INSTITUCIONAL)
 // ==========================================
@@ -349,7 +353,7 @@ function configurarListenerCamaraINE() {
 }
 
 // ==========================================
-// LOGIN Y SESIÓN (SUPER USUARIO ADMIN / CAPTURISTA)
+// LOGIN Y SESIÓN (SUPER USUARIO ADMIN / CAPTURISTA / PASE DE LISTA)
 // ==========================================
 function configurarEventosFormularios() {
   document.getElementById('form-login').addEventListener('submit', async (e) => {
@@ -408,8 +412,8 @@ function iniciarSesionUI() {
     document.getElementById('sidebar-rol-usuario').textContent = 'SUPER USUARIO · ADMIN';
   } else if (esCapturista()) {
     document.getElementById('sidebar-rol-usuario').textContent = 'CAPTURISTA · SOLO CAPTURA';
-  } else if (usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada) {
-    document.getElementById('sidebar-rol-usuario').textContent = `Pase de Lista · Sec. ${usuarioActual.seccion_asignada}`;
+  } else if (esPaseLista()) {
+    document.getElementById('sidebar-rol-usuario').textContent = `Pase de Lista · Sec. ${usuarioActual.seccion_asignada || 'Sin asignar'}`;
   } else {
     document.getElementById('sidebar-rol-usuario').textContent = usuarioActual.rol;
   }
@@ -425,20 +429,28 @@ function iniciarSesionUI() {
   const cardTablaSimp = document.getElementById('card-tabla-simpatizantes');
   const cardTablaProm = document.getElementById('card-tabla-promotores');
   const btnImprimir = document.getElementById('btn-topbar-imprimir');
+  const plFiltroSeccion = document.getElementById('pl-filtro-seccion');
 
   if (cardTablaSimp) cardTablaSimp.classList.remove('oculto');
   if (cardTablaProm) cardTablaProm.classList.remove('oculto');
   if (btnImprimir) btnImprimir.classList.remove('oculto');
+  if (plFiltroSeccion) {
+    plFiltroSeccion.classList.remove('oculto');
+    plFiltroSeccion.value = '';
+  }
 
   const menuUsuarios = document.getElementById('menu-usuarios');
   if (!esSuperUsuario()) {
     menuUsuarios.classList.add('oculto');
   }
 
-  if (usuarioActual.rol === 'pase_lista') {
+  if (esPaseLista()) {
     document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
       if (btn.dataset.vista !== 'sec-pase-lista') btn.classList.add('oculto');
     });
+    if (plFiltroSeccion) {
+      plFiltroSeccion.classList.add('oculto');
+    }
     cargarSimpatizantes();
     navegarA('sec-pase-lista', `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`);
   } else if (esCapturista()) {
@@ -963,11 +975,21 @@ function exportarPDFAvancePromotores() {
 async function cargarSimpatizantes() {
   if (esCapturista()) return;
 
-  const url = usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada
-    ? `/api/simpatizantes/${usuarioActual.seccion_asignada}`
-    : '/api/simpatizantes-todos';
+  if (esPaseLista()) {
+    if (!usuarioActual.seccion_asignada) {
+      cacheSimpatizantes = [];
+      renderizarPaseLista();
+      return;
+    }
+    const res = await fetch(`/api/simpatizantes/${encodeURIComponent(usuarioActual.seccion_asignada)}?basico=1`);
+    if (res.ok) {
+      cacheSimpatizantes = await res.json();
+      renderizarPaseLista();
+    }
+    return;
+  }
 
-  const res = await fetch(url);
+  const res = await fetch('/api/simpatizantes-todos');
   if (res.ok) {
     cacheSimpatizantes = await res.json();
     renderizarSimpatizantes();
@@ -1027,10 +1049,19 @@ function obtenerPaseListaFiltrado() {
   const fEst = document.getElementById('pl-filtro-estado')?.value || 'todos';
 
   return cacheSimpatizantes.filter(s => {
-    if (fSec && !String(s.seccion).includes(fSec)) return false;
+    if (esPaseLista() && usuarioActual.seccion_asignada) {
+      if (String(s.seccion) !== String(usuarioActual.seccion_asignada)) return false;
+    } else if (fSec && !String(s.seccion).includes(fSec)) {
+      return false;
+    }
     if (fEst === 'si' && !s.asistio) return false;
     if (fEst === 'no' && s.asistio) return false;
-    if (fNom && !`${s.nombre} ${s.localidad}`.toUpperCase().includes(fNom)) return false;
+    if (fNom) {
+      const textoBusqueda = esPaseLista()
+        ? `${s.nombre}`
+        : `${s.nombre} ${s.localidad || ''}`;
+      if (!textoBusqueda.toUpperCase().includes(fNom)) return false;
+    }
     return true;
   });
 }
@@ -1039,11 +1070,59 @@ function renderizarPaseLista() {
   const tbody = document.getElementById('tabla-pase-lista-body');
   if (!tbody) return;
 
+  const tabla = tbody.closest('table');
+  const thead = tabla ? tabla.querySelector('thead') : null;
+  const soloBasicoPaseLista = esPaseLista();
+
+  if (thead) {
+    if (soloBasicoPaseLista) {
+      thead.innerHTML = `
+        <tr>
+          <th>Nombre Completo</th>
+          <th>Sección</th>
+          <th>Status</th>
+          <th>Confirmación</th>
+        </tr>
+      `;
+    } else {
+      thead.innerHTML = `
+        <tr>
+          <th>Status</th>
+          <th>Sección</th>
+          <th>Nombre Completo</th>
+          <th>Localidad</th>
+          <th>Promotor / Referencia</th>
+          <th>Acción</th>
+        </tr>
+      `;
+    }
+  }
+
   const filtrados = obtenerPaseListaFiltrado();
   const asistieron = filtrados.filter(s => s.asistio).length;
   document.getElementById('pl-total').textContent = filtrados.length;
   document.getElementById('pl-asistieron').textContent = asistieron;
   document.getElementById('pl-pendientes').textContent = filtrados.length - asistieron;
+
+  if (soloBasicoPaseLista) {
+    tbody.innerHTML = filtrados.map(s => `
+      <tr>
+        <td><strong>${s.nombre}</strong></td>
+        <td><span class="badge badge-morado">${s.seccion}</span></td>
+        <td>
+          ${s.asistio
+            ? '<span class="badge badge-verde">Confirmado</span>'
+            : '<span class="badge badge-ambar">Pendiente</span>'}
+        </td>
+        <td>
+          ${s.asistio
+            ? '<button type="button" class="btn btn-sm btn-gris" disabled style="opacity:0.78; cursor:not-allowed;">🔒 Confirmado</button>'
+            : `<button type="button" class="btn btn-sm btn-verde" onclick="toggleAsistencia(${s.id}, true)">✓ Confirmar Asistencia</button>`}
+        </td>
+      </tr>
+    `).join('');
+    return;
+  }
 
   tbody.innerHTML = filtrados.map(s => `
     <tr>
@@ -1066,15 +1145,23 @@ function renderizarPaseLista() {
 }
 
 function exportarExcelPaseLista() {
-  const datos = obtenerPaseListaFiltrado().map(s => ({
-    Estado: s.asistio ? 'ASISTIO' : 'PENDIENTE',
-    Seccion: s.seccion,
-    Nombre: s.nombre,
-    CURP: s.curp || '',
-    Clave_Elector: s.clave_elector || '',
-    Localidad: s.localidad || '',
-    Referencia: s.referencia || ''
-  }));
+  const lista = obtenerPaseListaFiltrado();
+  const datos = esPaseLista()
+    ? lista.map(s => ({
+        Nombre: s.nombre,
+        Seccion: s.seccion,
+        Status: s.asistio ? 'CONFIRMADO' : 'PENDIENTE'
+      }))
+    : lista.map(s => ({
+        Estado: s.asistio ? 'ASISTIO' : 'PENDIENTE',
+        Seccion: s.seccion,
+        Nombre: s.nombre,
+        CURP: s.curp || '',
+        Clave_Elector: s.clave_elector || '',
+        Localidad: s.localidad || '',
+        Referencia: s.referencia || ''
+      }));
+
   const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Pase_de_Lista');
@@ -1082,7 +1169,26 @@ function exportarExcelPaseLista() {
 }
 
 function exportarPDFPaseLista() {
-  const filas = obtenerPaseListaFiltrado().map(s => [
+  const lista = obtenerPaseListaFiltrado();
+
+  if (esPaseLista()) {
+    const filas = lista.map(s => [
+      s.nombre,
+      s.seccion,
+      s.asistio ? 'CONFIRMADO' : 'PENDIENTE'
+    ]);
+    generarPDFTabla({
+      titulo: `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`,
+      subtitulo: 'Control de asistencia seccional',
+      columnas: ['Nombre Completo', 'Sección', 'Status'],
+      filas,
+      nombreArchivo: `Pase_de_Lista_Seccion_${usuarioActual.seccion_asignada || '2027'}.pdf`,
+      orientacion: 'portrait'
+    });
+    return;
+  }
+
+  const filas = lista.map(s => [
     s.asistio ? 'ASISTIÓ' : 'PENDIENTE',
     s.seccion,
     s.nombre,
@@ -1092,7 +1198,7 @@ function exportarPDFPaseLista() {
   generarPDFTabla({
     titulo: 'Pase de Lista · Control de Asistencia',
     subtitulo: 'Padrón de verificación territorial',
-    columnas: ['Estado', 'Sección', 'Nombre Completo', 'Localidad', 'Promotor / Referencia'],
+    columnas: ['Status', 'Sección', 'Nombre Completo', 'Localidad', 'Promotor / Referencia'],
     filas,
     nombreArchivo: 'Pase_de_Lista_Cunduacan_2027.pdf'
   });
@@ -1160,13 +1266,38 @@ function resetFormSimpatizante() {
 }
 
 async function toggleAsistencia(id, asistio) {
-  await fetch(`/api/simpatizantes/${id}/asistencia`, {
+  const item = cacheSimpatizantes.find(s => s.id === id);
+
+  if (!esSuperUsuario()) {
+    if (item && item.asistio) return;
+    if (!asistio) return;
+
+    const nombreComp = item ? item.nombre : 'este simpatizante';
+    const seccionComp = item ? item.seccion : (usuarioActual.seccion_asignada || '');
+    const confirmado = confirm(
+      `¿Confirmar la asistencia de "${nombreComp}" (Sección ${seccionComp})?\n\nUna vez confirmada, el registro quedará bloqueado.`
+    );
+    if (!confirmado) return;
+  }
+
+  const res = await fetch(`/api/simpatizantes/${id}/asistencia`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ asistio })
+    body: JSON.stringify({
+      asistio: Boolean(asistio),
+      rol: usuarioActual ? usuarioActual.rol : '',
+      seccion_asignada: usuarioActual ? usuarioActual.seccion_asignada : ''
+    })
   });
-  const item = cacheSimpatizantes.find(s => s.id === id);
-  if (item) item.asistio = asistio;
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || 'No se pudo actualizar el estatus.');
+    await cargarSimpatizantes();
+    return;
+  }
+
+  if (item) item.asistio = Boolean(asistio);
   renderizarSimpatizantes();
   renderizarPaseLista();
   renderizarAvancePromotores();
@@ -1711,23 +1842,103 @@ function toggleCampoSeccionUsuario() {
   }
 }
 
+function onCambioSelectRolUsuario(id) {
+  const selRol = document.getElementById(`edit-rol-${id}`);
+  const selSec = document.getElementById(`edit-sec-${id}`);
+  const txtSec = document.getElementById(`edit-sec-texto-${id}`);
+  if (!selRol || !selSec || !txtSec) return;
+
+  if (selRol.value === 'pase_lista') {
+    selSec.classList.remove('oculto');
+    txtSec.classList.add('oculto');
+  } else {
+    selSec.classList.add('oculto');
+    txtSec.classList.remove('oculto');
+  }
+}
+
+async function cambiarRolUsuario(id) {
+  const u = cacheUsuarios.find(item => item.id === id);
+  const selRol = document.getElementById(`edit-rol-${id}`);
+  const selSec = document.getElementById(`edit-sec-${id}`);
+  if (!selRol) return;
+
+  const nuevoRol = selRol.value;
+  const nuevaSeccion = nuevoRol === 'pase_lista' ? (selSec ? selSec.value : '') : null;
+
+  if (nuevoRol === 'pase_lista' && !nuevaSeccion) {
+    alert('Selecciona la sección asignada para el rol Pase de Lista.');
+    if (selSec) selSec.focus();
+    return;
+  }
+
+  const nombreUsuario = u ? u.usuario : 'este usuario';
+  const detalleRol = nuevoRol === 'pase_lista' ? `pase_lista (Sección ${nuevaSeccion})` : nuevoRol;
+  if (!confirm(`¿Cambiar el rol de "${nombreUsuario}" a "${detalleRol}"?`)) return;
+
+  const res = await fetch(`/api/usuarios/${id}/rol`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rol: nuevoRol,
+      seccion_asignada: nuevaSeccion
+    })
+  });
+
+  const data = await res.json();
+  if (res.ok) {
+    alert(`Rol de "${nombreUsuario}" actualizado correctamente.`);
+    await cargarUsuarios();
+  } else {
+    alert(data.error || 'No se pudo cambiar el rol.');
+  }
+}
+
 async function cargarUsuarios() {
   const res = await fetch('/api/usuarios');
   if (!res.ok) return;
   cacheUsuarios = await res.json();
   const tbody = document.getElementById('tabla-usuarios-body');
   if (!tbody) return;
-  tbody.innerHTML = cacheUsuarios.map(u => `
-    <tr>
-      <td><strong>${u.usuario}</strong></td>
-      <td>${u.password}</td>
-      <td><span class="badge badge-morado">${u.rol === 'admin' ? 'admin (Super Usuario)' : u.rol}</span></td>
-      <td>${u.seccion_asignada || '-'}</td>
-      <td class="no-print">
-        ${u.usuario === 'admin' ? '' : `<button type="button" class="btn btn-sm btn-rojo" onclick="eliminarUsuario(${u.id})">Eliminar</button>`}
-      </td>
-    </tr>
-  `).join('');
+
+  tbody.innerHTML = cacheUsuarios.map(u => {
+    if (u.usuario === 'admin') {
+      return `
+        <tr>
+          <td><strong>${u.usuario}</strong></td>
+          <td>${u.password}</td>
+          <td><span class="badge badge-morado">admin (Super Usuario)</span></td>
+          <td>-</td>
+          <td class="no-print"><span style="color:#9ca3af; font-size:0.82rem;">Principal</span></td>
+        </tr>
+      `;
+    }
+
+    return `
+      <tr>
+        <td><strong>${u.usuario}</strong></td>
+        <td>${u.password}</td>
+        <td>
+          <select id="edit-rol-${u.id}" class="select-tabla-rol" onchange="onCambioSelectRolUsuario(${u.id})">
+            <option value="capturista" ${u.rol === 'capturista' ? 'selected' : ''}>capturista</option>
+            <option value="pase_lista" ${u.rol === 'pase_lista' ? 'selected' : ''}>pase_lista</option>
+            <option value="admin" ${u.rol === 'admin' ? 'selected' : ''}>admin (Super Usuario)</option>
+          </select>
+        </td>
+        <td>
+          <select id="edit-sec-${u.id}" class="select-tabla-rol ${u.rol === 'pase_lista' ? '' : 'oculto'}">
+            <option value="">Selecciona sección...</option>
+            ${SECCIONES_CUNDUACAN.map(sec => `<option value="${sec}" ${u.seccion_asignada === sec ? 'selected' : ''}>${sec}</option>`).join('')}
+          </select>
+          <span id="edit-sec-texto-${u.id}" class="${u.rol === 'pase_lista' ? 'oculto' : ''}" style="color:#9ca3af;">-</span>
+        </td>
+        <td class="no-print">
+          <button type="button" class="btn btn-sm btn-editar" onclick="cambiarRolUsuario(${u.id})">Guardar Rol</button>
+          <button type="button" class="btn btn-sm btn-rojo" onclick="eliminarUsuario(${u.id})">Eliminar</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function exportarPDFUsuarios() {
@@ -1760,12 +1971,12 @@ async function crearUsuario(e) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
+  const data = await res.json();
   if (res.ok) {
     document.getElementById('form-usuario').reset();
     toggleCampoSeccionUsuario();
     cargarUsuarios();
   } else {
-    const data = await res.json();
     alert(data.error || 'Error al crear usuario.');
   }
 }

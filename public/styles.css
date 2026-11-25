@@ -540,6 +540,22 @@ td.no-print {
   white-space: nowrap;
 }
 
+.select-tabla-rol {
+  padding: 6px 10px;
+  border: 1.5px solid #d8b4fe;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--morado-oscuro);
+  background: var(--blanco);
+  cursor: pointer;
+}
+
+.select-tabla-rol:focus {
+  outline: none;
+  border-color: var(--morado-principal);
+}
+
 /* ==========================================
    FILAS DESPLEGABLES EN AVANCE POR PROMOTOR
    ========================================== */

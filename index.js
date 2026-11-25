@@ -323,15 +323,57 @@ app.get('/api/usuarios', async (_req, res) => {
 app.post('/api/usuarios', async (req, res) => {
   try {
     const { usuario, password, rol, seccion_asignada } = req.body;
-    const sec = rol === 'pase_lista' ? normalizarSeccion(seccion_asignada) : null;
+    const rolesValidos = new Set(['admin', 'capturista', 'pase_lista']);
+    const rolFinal = rolesValidos.has(rol) ? rol : 'capturista';
+
+    let sec = null;
+    if (rolFinal === 'pase_lista') {
+      sec = normalizarSeccion(seccion_asignada);
+      if (!sec || !SECCIONES_CUNDUACAN.has(sec)) {
+        return res.status(400).json({ error: 'Selecciona una sección válida de Cunduacán para el rol Pase de Lista.' });
+      }
+    }
+
     await pool.query(
       'INSERT INTO usuarios (usuario, password, rol, seccion_asignada, requiere_cambio) VALUES ($1, $2, $3, $4, TRUE)',
-      [String(usuario || '').trim(), String(password || ''), rol || 'capturista', sec]
+      [String(usuario || '').trim(), String(password || ''), rolFinal, sec]
     );
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(400).json({ error: 'No se pudo crear el usuario (verifica si ya existe).' });
+  }
+});
+
+app.patch('/api/usuarios/:id/rol', async (req, res) => {
+  try {
+    const { rol, seccion_asignada } = req.body;
+    const rolesValidos = new Set(['admin', 'capturista', 'pase_lista']);
+    if (!rolesValidos.has(rol)) {
+      return res.status(400).json({ error: 'Rol no válido.' });
+    }
+
+    let sec = null;
+    if (rol === 'pase_lista') {
+      sec = normalizarSeccion(seccion_asignada);
+      if (!sec || !SECCIONES_CUNDUACAN.has(sec)) {
+        return res.status(400).json({ error: 'Selecciona una sección válida de Cunduacán para el rol Pase de Lista.' });
+      }
+    }
+
+    const result = await pool.query(
+      "UPDATE usuarios SET rol = $1, seccion_asignada = $2 WHERE id = $3 AND usuario <> 'admin'",
+      [rol, sec, req.params.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(400).json({ error: 'No se pudo cambiar el rol de este usuario.' });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al cambiar el rol del usuario.' });
   }
 });
 
@@ -382,10 +424,13 @@ app.get('/api/simpatizantes-todos', async (_req, res) => {
 app.get('/api/simpatizantes/:seccion', async (req, res) => {
   try {
     const sec = normalizarSeccion(req.params.seccion);
-    const result = await pool.query(
-      'SELECT * FROM simpatizantes WHERE seccion = $1 ORDER BY nombre ASC',
-      [sec]
-    );
+    const soloBasico = String(req.query.basico || '') === '1';
+
+    const consulta = soloBasico
+      ? 'SELECT id, nombre, seccion, asistio FROM simpatizantes WHERE seccion = $1 ORDER BY nombre ASC'
+      : 'SELECT * FROM simpatizantes WHERE seccion = $1 ORDER BY nombre ASC';
+
+    const result = await pool.query(consulta, [sec]);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -440,7 +485,23 @@ app.patch('/api/simpatizantes/:id/editar', async (req, res) => {
 
 app.patch('/api/simpatizantes/:id/asistencia', async (req, res) => {
   try {
-    const { asistio } = req.body;
+    const { asistio, rol, seccion_asignada } = req.body;
+
+    if (rol === 'pase_lista') {
+      if (!asistio) {
+        return res.status(403).json({ error: 'No tienes permiso para revertir una asistencia confirmada.' });
+      }
+      const sec = normalizarSeccion(seccion_asignada);
+      const result = await pool.query(
+        'UPDATE simpatizantes SET asistio = TRUE WHERE id = $1 AND seccion = $2 AND asistio = FALSE',
+        [req.params.id, sec]
+      );
+      if (result.rowCount === 0) {
+        return res.status(403).json({ error: 'Este registro ya fue confirmado y bloqueado o no pertenece a tu sección.' });
+      }
+      return res.json({ ok: true });
+    }
+
     await pool.query('UPDATE simpatizantes SET asistio = $1 WHERE id = $2', [Boolean(asistio), req.params.id]);
     res.json({ ok: true });
   } catch (err) {
