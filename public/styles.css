@@ -541,6 +541,89 @@ td.no-print {
 }
 
 /* ==========================================
+   FILAS DESPLEGABLES EN AVANCE POR PROMOTOR
+   ========================================== */
+tr.fila-promotor-click {
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+
+tr.fila-promotor-click.expandida {
+  background-color: var(--morado-suave) !important;
+}
+
+.indicador-expandir {
+  display: inline-block;
+  width: 16px;
+  font-size: 0.75rem;
+  color: var(--morado-principal);
+  font-weight: 800;
+  margin-right: 4px;
+}
+
+.subtexto-participacion {
+  font-size: 0.77rem;
+  color: var(--texto-suave);
+  margin-top: 2px;
+}
+
+tr.fila-detalle-promotor,
+tr.fila-detalle-promotor:hover {
+  background-color: #fbf8ff !important;
+}
+
+tr.fila-detalle-promotor > td {
+  padding: 12px 16px 16px;
+  border-bottom: 2px solid var(--morado-borde);
+}
+
+.panel-detalle-promotor {
+  background: var(--blanco);
+  border: 1px solid #d8b4fe;
+  border-left: 4px solid var(--morado-principal);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.panel-detalle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  color: var(--morado-oscuro);
+}
+
+.panel-detalle-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detalle-vacio {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.subtabla-detalle thead {
+  background: var(--morado-principal);
+}
+
+.subtabla-detalle th {
+  padding: 8px 10px;
+  font-size: 0.74rem;
+}
+
+.subtabla-detalle td {
+  padding: 8px 10px;
+  font-size: 0.83rem;
+}
+
+/* ==========================================
    BOTONES Y ETIQUETAS (BADGES)
    ========================================== */
 .btn {

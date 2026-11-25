@@ -16,6 +16,7 @@ let cachePromotores = [];
 let cacheEstructura = [];
 let cacheUsuarios = [];
 let seccionesSeleccionadasEst = new Set();
+let promotoresExpandidos = new Set();
 let destinoINEActual = null;
 
 function esSuperUsuario() {
@@ -417,7 +418,6 @@ function iniciarSesionUI() {
     document.getElementById('modal-password').classList.remove('oculto');
   }
 
-  // Restaurar visibilidad base de menú y componentes antes de aplicar permisos
   document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
     btn.classList.remove('oculto');
   });
@@ -442,7 +442,6 @@ function iniciarSesionUI() {
     cargarSimpatizantes();
     navegarA('sec-pase-lista', `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`);
   } else if (esCapturista()) {
-    // Capturista: únicamente formularios de captura de Simpatizantes y Promotores
     const vistasCapturista = new Set(['sec-simpatizantes', 'sec-promotores']);
     document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
       if (!vistasCapturista.has(btn.dataset.vista)) btn.classList.add('oculto');
@@ -454,7 +453,6 @@ function iniciarSesionUI() {
     cargarPromotores();
     navegarA('sec-simpatizantes', 'Captura de Simpatizantes');
   } else {
-    // Super Usuario (admin): acceso total a todos los módulos y funciones
     cargarTodo();
     navegarA('sec-avances', 'Avances y Resumen General');
   }
@@ -608,21 +606,30 @@ function exportarPDFAvances() {
 // 1B. AVANCE POR PROMOTOR (100% = 15 SIMPATIZANTES)
 // ==========================================
 function calcularEstadisticasPromotores() {
-  const conteoPorReferencia = new Map();
+  const referidosPorPromotor = new Map();
   cacheSimpatizantes.forEach(s => {
     const ref = String(s.referencia || '').trim().toUpperCase();
     if (!ref) return;
-    conteoPorReferencia.set(ref, (conteoPorReferencia.get(ref) || 0) + 1);
+    if (!referidosPorPromotor.has(ref)) {
+      referidosPorPromotor.set(ref, []);
+    }
+    referidosPorPromotor.get(ref).push(s);
   });
 
   return cachePromotores.map(p => {
     const nombreNorm = String(p.nombre || '').trim().toUpperCase();
-    const cantidad = conteoPorReferencia.get(nombreNorm) || 0;
+    const referidos = (referidosPorPromotor.get(nombreNorm) || []).slice().sort((a, b) =>
+      String(a.nombre || '').localeCompare(String(b.nombre || ''))
+    );
+    const cantidad = referidos.length;
+    const asistieron = referidos.filter(s => Boolean(s.asistio)).length;
     const faltantes = Math.max(0, META_SIMPATIZANTES_PROMOTOR - cantidad);
     const porcentaje = (cantidad / META_SIMPATIZANTES_PROMOTOR) * 100;
     return {
       ...p,
+      referidos,
       cantidad,
+      asistieron,
       faltantes,
       porcentaje
     };
@@ -645,6 +652,16 @@ function obtenerAvancePromotoresFiltrados() {
       return true;
     })
     .sort((a, b) => b.cantidad - a.cantidad || String(a.seccion).localeCompare(String(b.seccion)));
+}
+
+function toggleDetallePromotor(idPromotor) {
+  const clave = String(idPromotor);
+  if (promotoresExpandidos.has(clave)) {
+    promotoresExpandidos.delete(clave);
+  } else {
+    promotoresExpandidos.add(clave);
+  }
+  renderizarAvancePromotores();
 }
 
 function renderizarAvancePromotores() {
@@ -672,11 +689,19 @@ function renderizarAvancePromotores() {
     const badgeClase = p.cantidad >= META_SIMPATIZANTES_PROMOTOR
       ? 'badge-verde'
       : (p.cantidad > 0 ? 'badge-morado' : 'badge-ambar');
+    const estaExpandido = promotoresExpandidos.has(String(p.id));
+    const pendientesPart = p.cantidad - p.asistieron;
 
-    return `
-      <tr>
-        <td><span class="badge badge-morado">${p.seccion}</span></td>
-        <td><strong>${p.nombre}</strong></td>
+    const filaPromotor = `
+      <tr class="fila-promotor-click ${estaExpandido ? 'expandida' : ''}" onclick="toggleDetallePromotor(${p.id})" title="Haz clic para ver o ocultar el listado de simpatizantes">
+        <td>
+          <span class="indicador-expandir">${estaExpandido ? '▼' : '▶'}</span>
+          <span class="badge badge-morado">${p.seccion}</span>
+        </td>
+        <td>
+          <strong>${p.nombre}</strong>
+          <div class="subtexto-participacion">${p.asistieron} de ${p.cantidad} participaron</div>
+        </td>
         <td>${p.telefono || ''}</td>
         <td>${p.localidad || ''}</td>
         <td><span class="badge ${badgeClase}">${p.cantidad} / ${META_SIMPATIZANTES_PROMOTOR}</span></td>
@@ -689,43 +714,251 @@ function renderizarAvancePromotores() {
         </td>
       </tr>
     `;
+
+    if (!estaExpandido) return filaPromotor;
+
+    const contenidoDetalle = p.referidos.length === 0
+      ? `<p class="detalle-vacio">Este promotor aún no tiene simpatizantes registrados a su nombre.</p>`
+      : `
+        <div class="tabla-wrap">
+          <table class="subtabla-detalle">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Sección</th>
+                <th>Nombre Completo</th>
+                <th>CURP</th>
+                <th>Teléfono</th>
+                <th>Localidad / Dirección</th>
+                <th>Status de Participación</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${p.referidos.map((s, idx) => `
+                <tr>
+                  <td><strong>${idx + 1}</strong></td>
+                  <td><span class="badge badge-morado">${s.seccion}</span></td>
+                  <td><strong>${s.nombre}</strong></td>
+                  <td style="font-family:monospace; font-size:0.82rem;">${s.curp || '-'}</td>
+                  <td>${s.telefono || '-'}</td>
+                  <td>${s.localidad || '-'}</td>
+                  <td>
+                    ${s.asistio
+                      ? '<span class="badge badge-verde">✓ Participó</span>'
+                      : '<span class="badge badge-ambar">Pendiente</span>'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+    const filaDetalle = `
+      <tr class="fila-detalle-promotor">
+        <td colspan="7">
+          <div class="panel-detalle-promotor">
+            <div class="panel-detalle-header">
+              <span>📋 Listado a nombre de <strong>${p.nombre}</strong></span>
+              <div class="panel-detalle-badges">
+                <span class="badge badge-morado">Total: ${p.cantidad}</span>
+                <span class="badge badge-verde">Participaron: ${p.asistieron}</span>
+                <span class="badge badge-ambar">Pendientes: ${pendientesPart}</span>
+              </div>
+            </div>
+            ${contenidoDetalle}
+          </div>
+        </td>
+      </tr>
+    `;
+
+    return filaPromotor + filaDetalle;
   }).join('');
 }
 
 function exportarExcelAvancePromotores() {
-  const filas = obtenerAvancePromotoresFiltrados().map(p => ({
+  const lista = obtenerAvancePromotoresFiltrados();
+  const filasResumen = lista.map(p => ({
     Seccion: p.seccion,
     Promotor: p.nombre,
     Telefono: p.telefono || '',
     Localidad: p.localidad || '',
     Simpatizantes: p.cantidad,
+    Participaron: p.asistieron,
+    Pendientes_Participacion: p.cantidad - p.asistieron,
     Meta: META_SIMPATIZANTES_PROMOTOR,
-    Faltantes: p.faltantes,
+    Faltantes_Meta: p.faltantes,
     Porcentaje_Avance: `${p.porcentaje.toFixed(1)}%`
   }));
-  const ws = XLSX.utils.json_to_sheet(filas);
+
+  const filasDetalle = [];
+  lista.forEach(p => {
+    if (p.referidos.length === 0) {
+      filasDetalle.push({
+        Promotor: p.nombre,
+        Seccion_Promotor: p.seccion,
+        No: 0,
+        Simpatizante: 'SIN REGISTROS',
+        Seccion_Simpatizante: '',
+        CURP: '',
+        Telefono: '',
+        Localidad: '',
+        Status_Participacion: ''
+      });
+    } else {
+      p.referidos.forEach((s, idx) => {
+        filasDetalle.push({
+          Promotor: p.nombre,
+          Seccion_Promotor: p.seccion,
+          No: idx + 1,
+          Simpatizante: s.nombre,
+          Seccion_Simpatizante: s.seccion,
+          CURP: s.curp || '',
+          Telefono: s.telefono || '',
+          Localidad: s.localidad || '',
+          Status_Participacion: s.asistio ? 'PARTICIPO' : 'PENDIENTE'
+        });
+      });
+    }
+  });
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Avance_Por_Promotor');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasResumen), 'Resumen_Promotores');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasDetalle), 'Detalle_Por_Promotor');
   XLSX.writeFile(wb, 'Avance_Por_Promotor_Cunduacan_2027.xlsx');
 }
 
 function exportarPDFAvancePromotores() {
-  const filas = obtenerAvancePromotoresFiltrados().map(p => [
-    p.seccion,
-    p.nombre,
-    p.telefono || '-',
-    p.localidad || '-',
-    `${p.cantidad} / ${META_SIMPATIZANTES_PROMOTOR}`,
-    p.faltantes === 0 ? 'Meta cumplida' : String(p.faltantes),
-    `${p.porcentaje.toFixed(1)}%`
-  ]);
-  generarPDFTabla({
-    titulo: 'Avance Individual por Promotor',
-    subtitulo: 'Meta base: 15 simpatizantes = 100%',
-    columnas: ['Sección', 'Promotor', 'Teléfono', 'Localidad', 'Simpatizantes', 'Faltantes', '% Avance'],
-    filas,
-    nombreArchivo: 'Avance_Por_Promotor_Cunduacan_2027.pdf'
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('La librería PDF aún está cargando. Intenta de nuevo en un segundo.');
+    return;
+  }
+
+  const lista = obtenerAvancePromotoresFiltrados();
+  const totalSimp = lista.reduce((acc, p) => acc + p.cantidad, 0);
+  const totalPart = lista.reduce((acc, p) => acc + p.asistieron, 0);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+  const fechaHora = new Date().toLocaleString('es-MX', {
+    dateStyle: 'short',
+    timeStyle: 'short'
   });
+
+  doc.setFillColor(59, 7, 100);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 22, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Cunduacán 2027 · Avance por Promotor y Listado de Participación', 14, 10);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    `Meta: 15 = 100%  |  Promotores: ${lista.length}  |  Simpatizantes: ${totalSimp}  |  Participaron: ${totalPart}  |  Generado: ${fechaHora}`,
+    14,
+    17
+  );
+
+  const filasCuerpo = [];
+  const metaFilas = [];
+
+  lista.forEach(p => {
+    filasCuerpo.push([
+      `Sec. ${p.seccion}`,
+      `PROMOTOR: ${p.nombre}`,
+      p.telefono || '-',
+      p.localidad || '-',
+      `${p.cantidad} / ${META_SIMPATIZANTES_PROMOTOR}`,
+      p.faltantes === 0 ? 'Cumplida' : String(p.faltantes),
+      `${p.porcentaje.toFixed(1)}% (${p.asistieron} part.)`
+    ]);
+    metaFilas.push({ tipo: 'promotor' });
+
+    if (p.referidos.length === 0) {
+      filasCuerpo.push([
+        '',
+        '   Sin simpatizantes registrados a su nombre',
+        '',
+        '',
+        '',
+        '',
+        ''
+      ]);
+      metaFilas.push({ tipo: 'vacio' });
+    } else {
+      p.referidos.forEach((s, idx) => {
+        filasCuerpo.push([
+          `   #${idx + 1} (Sec. ${s.seccion})`,
+          `   • ${s.nombre}`,
+          s.telefono || '-',
+          s.localidad || '-',
+          s.curp || '-',
+          '',
+          s.asistio ? 'PARTICIPÓ' : 'PENDIENTE'
+        ]);
+        metaFilas.push({ tipo: 'simpatizante', asistio: Boolean(s.asistio) });
+      });
+    }
+  });
+
+  doc.autoTable({
+    head: [['Sección / #', 'Promotor / Simpatizante', 'Teléfono', 'Localidad / Dirección', 'Meta / CURP', 'Faltantes', 'Avance / Participación']],
+    body: filasCuerpo,
+    startY: 27,
+    theme: 'grid',
+    styles: {
+      fontSize: 7.8,
+      cellPadding: 2.3,
+      textColor: [31, 41, 55],
+      lineColor: [233, 213, 255],
+      lineWidth: 0.2
+    },
+    headStyles: {
+      fillColor: [107, 33, 168],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body') return;
+      const meta = metaFilas[data.row.index];
+      if (!meta) return;
+
+      if (meta.tipo === 'promotor') {
+        data.cell.styles.fillColor = [243, 232, 255];
+        data.cell.styles.textColor = [59, 7, 100];
+        data.cell.styles.fontStyle = 'bold';
+      } else if (meta.tipo === 'vacio') {
+        data.cell.styles.fillColor = [255, 255, 255];
+        data.cell.styles.textColor = [107, 114, 128];
+        data.cell.styles.fontStyle = 'italic';
+      } else if (meta.tipo === 'simpatizante') {
+        data.cell.styles.fillColor = [255, 255, 255];
+        if (data.column.index === 6) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.textColor = meta.asistio ? [21, 128, 61] : [180, 83, 9];
+        }
+      }
+    },
+    margin: { left: 14, right: 14, bottom: 16 },
+    didDrawPage: (data) => {
+      const totalPaginas = doc.internal.getNumberOfPages();
+      const altoPagina = doc.internal.pageSize.getHeight();
+      const anchoPagina = doc.internal.pageSize.getWidth();
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128);
+      doc.text(
+        `Organización Territorial Cunduacán · Página ${data.pageNumber} de ${totalPaginas}`,
+        anchoPagina - 14,
+        altoPagina - 7,
+        { align: 'right' }
+      );
+    }
+  });
+
+  doc.save('Avance_Por_Promotor_Detallado_Cunduacan_2027.pdf');
 }
 
 // ==========================================
@@ -940,6 +1173,7 @@ async function toggleAsistencia(id, asistio) {
   if (item) item.asistio = asistio;
   renderizarSimpatizantes();
   renderizarPaseLista();
+  renderizarAvancePromotores();
   if (esSuperUsuario()) cargarAvances();
 }
 
