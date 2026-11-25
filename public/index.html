@@ -108,7 +108,7 @@
         <button type="button" class="btn-hamburguesa no-print" onclick="abrirSidebarMovil()">☰</button>
         <h2 id="titulo-vista-actual">Avances y Resumen General</h2>
         <div class="topbar-actions no-print">
-          <button type="button" class="btn btn-sm btn-gris" onclick="window.print()">🖨️ Imprimir</button>
+          <button type="button" id="btn-topbar-imprimir" class="btn btn-sm btn-gris" onclick="window.print()">🖨️ Imprimir</button>
         </div>
       </header>
 
@@ -259,8 +259,8 @@
           <form id="form-simpatizante" class="form-grid">
             <input type="hidden" id="simp-id" />
             <div class="campo">
-              <label for="simp-nombre">Nombre Completo *</label>
-              <input type="text" id="simp-nombre" required placeholder="Nombre y apellidos" />
+              <label for="simp-nombre">Nombre Completo (Apellidos y Nombres) *</label>
+              <input type="text" id="simp-nombre" required placeholder="Apellidos y nombres" />
             </div>
             <div class="campo">
               <label for="simp-curp">CURP</label>
@@ -293,7 +293,7 @@
           </form>
         </div>
 
-        <div class="card">
+        <div id="card-tabla-simpatizantes" class="card">
           <div class="card-header-flex">
             <h3>Padrón de Simpatizantes (<span id="contador-simpatizantes">0</span>)</h3>
             <div class="acciones-excel no-print">
@@ -409,8 +409,8 @@
           <form id="form-promotor" class="form-grid">
             <input type="hidden" id="prom-id" />
             <div class="campo">
-              <label for="prom-nombre">Nombre Completo *</label>
-              <input type="text" id="prom-nombre" required placeholder="Nombre y apellidos" />
+              <label for="prom-nombre">Nombre Completo (Apellidos y Nombres) *</label>
+              <input type="text" id="prom-nombre" required placeholder="Apellidos y nombres" />
             </div>
             <div class="campo">
               <label for="prom-telefono">Teléfono</label>
@@ -431,7 +431,7 @@
           </form>
         </div>
 
-        <div class="card">
+        <div id="card-tabla-promotores" class="card">
           <div class="card-header-flex">
             <h3>Lista de Promotores (<span id="contador-promotores">0</span>)</h3>
             <div class="acciones-excel no-print">
@@ -602,7 +602,7 @@
             <div class="campo">
               <label for="usu-rol">Rol *</label>
               <select id="usu-rol" onchange="toggleCampoSeccionUsuario()">
-                <option value="capturista">Capturista</option>
+                <option value="capturista">Capturista (Solo captura)</option>
                 <option value="pase_lista">Pase de Lista (por sección)</option>
                 <option value="admin">Administrador (Super Usuario)</option>
               </select>

@@ -22,6 +22,10 @@ function esSuperUsuario() {
   return usuarioActual && usuarioActual.rol === 'admin';
 }
 
+function esCapturista() {
+  return usuarioActual && usuarioActual.rol === 'capturista';
+}
+
 // ==========================================
 // GENERADOR DE REPORTES PDF (ESTILO INSTITUCIONAL)
 // ==========================================
@@ -164,11 +168,19 @@ function navegarA(idSeccion, titulo) {
     Promise.all([cargarPromotores(), cargarSimpatizantes()]).then(renderizarAvancePromotores);
   }
   if (idSeccion === 'sec-simpatizantes') {
-    Promise.all([cargarSimpatizantes(), cargarPromotores()]);
+    if (esCapturista()) {
+      cargarPromotores();
+    } else {
+      Promise.all([cargarSimpatizantes(), cargarPromotores()]);
+    }
   }
   if (idSeccion === 'sec-pase-lista') cargarSimpatizantes();
   if (idSeccion === 'sec-promotores') {
-    Promise.all([cargarPromotores(), cargarSimpatizantes()]);
+    if (esCapturista()) {
+      cargarPromotores();
+    } else {
+      Promise.all([cargarPromotores(), cargarSimpatizantes()]);
+    }
   }
   if (idSeccion === 'sec-estructura') {
     cargarEstructura();
@@ -238,9 +250,25 @@ function mostrarEstadoINE(destino, mensaje, tipo = 'info') {
   caja.classList.remove('oculto');
 }
 
-function asignarValor(id, valor) {
+function asignarValor(id, valor, bloquearEnCapturista = false) {
   const el = document.getElementById(id);
-  if (el && valor) el.value = valor;
+  if (!el || !valor) return;
+  el.value = valor;
+  if (bloquearEnCapturista && esCapturista()) {
+    el.readOnly = true;
+    el.classList.add('campo-bloqueado-ine');
+    el.title = 'Dato extraído de la INE (bloqueado)';
+  }
+}
+
+function desbloquearCamposINE(ids) {
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.readOnly = false;
+    el.classList.remove('campo-bloqueado-ine');
+    el.removeAttribute('title');
+  });
 }
 
 function configurarListenerCamaraINE() {
@@ -274,15 +302,17 @@ function configurarListenerCamaraINE() {
       const nombreCompleto = `${apellidos || ''} ${nombres || ''}`.trim();
 
       if (destino === 'simpatizante') {
-        asignarValor('simp-nombre', nombreCompleto);
-        asignarValor('simp-curp', curp);
-        asignarValor('simp-clave-elector', clave_elector);
-        asignarValor('simp-seccion', seccion);
-        asignarValor('simp-localidad', localidad);
+        desbloquearCamposINE(['simp-nombre', 'simp-curp', 'simp-clave-elector', 'simp-seccion', 'simp-localidad']);
+        asignarValor('simp-nombre', nombreCompleto, true);
+        asignarValor('simp-curp', curp, true);
+        asignarValor('simp-clave-elector', clave_elector, true);
+        asignarValor('simp-seccion', seccion, true);
+        asignarValor('simp-localidad', localidad, true);
       } else if (destino === 'promotor') {
-        asignarValor('prom-nombre', nombreCompleto);
-        asignarValor('prom-seccion', seccion);
-        asignarValor('prom-localidad', localidad);
+        desbloquearCamposINE(['prom-nombre', 'prom-seccion', 'prom-localidad']);
+        asignarValor('prom-nombre', nombreCompleto, true);
+        asignarValor('prom-seccion', seccion, true);
+        asignarValor('prom-localidad', localidad, true);
       } else if (destino === 'estructura') {
         asignarValor('est-nombres', nombres);
         asignarValor('est-apellidos', apellidos);
@@ -301,6 +331,12 @@ function configurarListenerCamaraINE() {
           `Leída en ${segundos}s, pero la sección ${seccion} no pertenece a las 60 secciones de Cunduacán.`,
           'alerta'
         );
+      } else if (esCapturista()) {
+        mostrarEstadoINE(
+          destino,
+          `Credencial leída en ${segundos}s. Datos de INE bloqueados; captura manualmente los campos restantes y guarda.`,
+          'ok'
+        );
       } else {
         mostrarEstadoINE(destino, `Credencial leída en ${segundos}s. Verifica los datos y guarda.`, 'ok');
       }
@@ -312,7 +348,7 @@ function configurarListenerCamaraINE() {
 }
 
 // ==========================================
-// LOGIN Y SESIÓN (SUPER USUARIO ADMIN)
+// LOGIN Y SESIÓN (SUPER USUARIO ADMIN / CAPTURISTA)
 // ==========================================
 function configurarEventosFormularios() {
   document.getElementById('form-login').addEventListener('submit', async (e) => {
@@ -369,6 +405,8 @@ function iniciarSesionUI() {
   document.getElementById('sidebar-nombre-usuario').textContent = usuarioActual.usuario;
   if (esSuperUsuario()) {
     document.getElementById('sidebar-rol-usuario').textContent = 'SUPER USUARIO · ADMIN';
+  } else if (esCapturista()) {
+    document.getElementById('sidebar-rol-usuario').textContent = 'CAPTURISTA · SOLO CAPTURA';
   } else if (usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada) {
     document.getElementById('sidebar-rol-usuario').textContent = `Pase de Lista · Sec. ${usuarioActual.seccion_asignada}`;
   } else {
@@ -379,10 +417,18 @@ function iniciarSesionUI() {
     document.getElementById('modal-password').classList.remove('oculto');
   }
 
-  // Habilitar todas las opciones del menú antes de aplicar permisos
+  // Restaurar visibilidad base de menú y componentes antes de aplicar permisos
   document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
     btn.classList.remove('oculto');
   });
+
+  const cardTablaSimp = document.getElementById('card-tabla-simpatizantes');
+  const cardTablaProm = document.getElementById('card-tabla-promotores');
+  const btnImprimir = document.getElementById('btn-topbar-imprimir');
+
+  if (cardTablaSimp) cardTablaSimp.classList.remove('oculto');
+  if (cardTablaProm) cardTablaProm.classList.remove('oculto');
+  if (btnImprimir) btnImprimir.classList.remove('oculto');
 
   const menuUsuarios = document.getElementById('menu-usuarios');
   if (!esSuperUsuario()) {
@@ -395,13 +441,18 @@ function iniciarSesionUI() {
     });
     cargarSimpatizantes();
     navegarA('sec-pase-lista', `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`);
-  } else if (usuarioActual.rol === 'capturista') {
+  } else if (esCapturista()) {
+    // Capturista: únicamente formularios de captura de Simpatizantes y Promotores
     const vistasCapturista = new Set(['sec-simpatizantes', 'sec-promotores']);
     document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
       if (!vistasCapturista.has(btn.dataset.vista)) btn.classList.add('oculto');
     });
-    Promise.all([cargarSimpatizantes(), cargarPromotores()]);
-    navegarA('sec-simpatizantes', 'Simpatizantes');
+    if (cardTablaSimp) cardTablaSimp.classList.add('oculto');
+    if (cardTablaProm) cardTablaProm.classList.add('oculto');
+    if (btnImprimir) btnImprimir.classList.add('oculto');
+
+    cargarPromotores();
+    navegarA('sec-simpatizantes', 'Captura de Simpatizantes');
   } else {
     // Super Usuario (admin): acceso total a todos los módulos y funciones
     cargarTodo();
@@ -681,6 +732,8 @@ function exportarPDFAvancePromotores() {
 // 2. SIMPATIZANTES Y PASE DE LISTA
 // ==========================================
 async function cargarSimpatizantes() {
+  if (esCapturista()) return;
+
   const url = usuarioActual.rol === 'pase_lista' && usuarioActual.seccion_asignada
     ? `/api/simpatizantes/${usuarioActual.seccion_asignada}`
     : '/api/simpatizantes-todos';
@@ -840,8 +893,12 @@ async function guardarSimpatizante(e) {
 
   if (res.ok) {
     resetFormSimpatizante();
-    await cargarSimpatizantes();
-    if (esSuperUsuario()) await cargarAvances();
+    if (esCapturista()) {
+      mostrarEstadoINE('simpatizante', 'Simpatizante guardado correctamente. Listo para el siguiente registro.', 'ok');
+    } else {
+      await cargarSimpatizantes();
+      if (esSuperUsuario()) await cargarAvances();
+    }
   } else {
     alert('Error al guardar simpatizante.');
   }
@@ -850,6 +907,7 @@ async function guardarSimpatizante(e) {
 function editarSimpatizante(id) {
   const s = cacheSimpatizantes.find(item => item.id === id);
   if (!s) return;
+  desbloquearCamposINE(['simp-nombre', 'simp-curp', 'simp-clave-elector', 'simp-seccion', 'simp-localidad']);
   document.getElementById('simp-id').value = s.id;
   document.getElementById('simp-nombre').value = s.nombre;
   document.getElementById('simp-curp').value = s.curp || '';
@@ -865,6 +923,7 @@ function editarSimpatizante(id) {
 
 function resetFormSimpatizante() {
   document.getElementById('form-simpatizante').reset();
+  desbloquearCamposINE(['simp-nombre', 'simp-curp', 'simp-clave-elector', 'simp-seccion', 'simp-localidad']);
   document.getElementById('simp-id').value = '';
   document.getElementById('titulo-form-simp').textContent = 'Registrar Simpatizante';
   document.getElementById('btn-cancelar-simp').classList.add('oculto');
@@ -988,8 +1047,10 @@ async function cargarPromotores() {
   if (res.ok) {
     cachePromotores = await res.json();
     actualizarDatalistPromotores();
-    renderizarPromotores();
-    renderizarAvancePromotores();
+    if (!esCapturista()) {
+      renderizarPromotores();
+      renderizarAvancePromotores();
+    }
   }
 }
 
@@ -1061,7 +1122,11 @@ async function guardarPromotor(e) {
   if (res.ok) {
     resetFormPromotor();
     await cargarPromotores();
-    if (esSuperUsuario()) renderizarAvances();
+    if (esCapturista()) {
+      mostrarEstadoINE('promotor', 'Promotor guardado correctamente. Listo para el siguiente registro.', 'ok');
+    } else if (esSuperUsuario()) {
+      renderizarAvances();
+    }
   } else {
     alert('Error al guardar promotor.');
   }
@@ -1070,6 +1135,7 @@ async function guardarPromotor(e) {
 function editarPromotor(id) {
   const p = cachePromotores.find(item => item.id === id);
   if (!p) return;
+  desbloquearCamposINE(['prom-nombre', 'prom-seccion', 'prom-localidad']);
   document.getElementById('prom-id').value = p.id;
   document.getElementById('prom-nombre').value = p.nombre;
   document.getElementById('prom-telefono').value = p.telefono || '';
@@ -1082,6 +1148,7 @@ function editarPromotor(id) {
 
 function resetFormPromotor() {
   document.getElementById('form-promotor').reset();
+  desbloquearCamposINE(['prom-nombre', 'prom-seccion', 'prom-localidad']);
   document.getElementById('prom-id').value = '';
   document.getElementById('titulo-form-prom').textContent = 'Registrar Promotor';
   document.getElementById('btn-cancelar-prom').classList.add('oculto');

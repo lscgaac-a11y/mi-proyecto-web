@@ -455,6 +455,19 @@ body {
   box-shadow: 0 0 0 3px rgba(107, 33, 168, 0.14);
 }
 
+.campo input.campo-bloqueado-ine {
+  background-color: var(--morado-suave);
+  border-color: #c084fc;
+  color: var(--morado-oscuro);
+  font-weight: 700;
+  cursor: not-allowed;
+}
+
+.campo input.campo-bloqueado-ine:focus {
+  box-shadow: none;
+  border-color: #c084fc;
+}
+
 .campo-completo {
   grid-column: 1 / -1;
 }
