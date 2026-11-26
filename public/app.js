@@ -32,6 +32,35 @@ function esPaseLista() {
 }
 
 // ==========================================
+// AJUSTE DE VIEWPORT Y ACCESOS MÓVILES
+// ==========================================
+function asegurarViewportMovil() {
+  let meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'viewport';
+    document.head.appendChild(meta);
+  }
+  meta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+}
+
+function asegurarBotonCerrarSesionTopbar() {
+  const topbar = document.querySelector('.topbar');
+  if (!topbar) return;
+
+  let btnSalir = document.getElementById('btn-topbar-salir');
+  if (!btnSalir) {
+    btnSalir = document.createElement('button');
+    btnSalir.id = 'btn-topbar-salir';
+    btnSalir.type = 'button';
+    btnSalir.className = 'btn btn-sm btn-rojo btn-salir-movil no-print';
+    btnSalir.textContent = 'Cerrar sesión';
+    btnSalir.onclick = cerrarSesion;
+    topbar.appendChild(btnSalir);
+  }
+}
+
+// ==========================================
 // GENERADOR DE REPORTES PDF (ESTILO INSTITUCIONAL)
 // ==========================================
 function generarPDFTabla({ titulo, subtitulo, columnas, filas, nombreArchivo, orientacion = 'landscape' }) {
@@ -103,6 +132,7 @@ function generarPDFTabla({ titulo, subtitulo, columnas, filas, nombreArchivo, or
 // INICIALIZACIÓN
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+  asegurarViewportMovil();
   poblarCatalogosIniciales();
   configurarEventosFormularios();
   configurarListenerCamaraINE();
@@ -404,8 +434,10 @@ function configurarEventosFormularios() {
 }
 
 function iniciarSesionUI() {
+  asegurarViewportMovil();
   document.getElementById('vista-login').classList.add('oculto');
   document.getElementById('vista-app').classList.remove('oculto');
+  asegurarBotonCerrarSesionTopbar();
 
   document.getElementById('sidebar-nombre-usuario').textContent = usuarioActual.usuario;
   if (esSuperUsuario()) {
@@ -1111,7 +1143,6 @@ function renderizarPaseLista() {
         <tr>
           <th>Nombre Completo</th>
           <th>Sección</th>
-          <th>Status</th>
           <th>Confirmación</th>
         </tr>
       `;
@@ -1142,17 +1173,12 @@ function renderizarPaseLista() {
   if (soloBasicoPaseLista) {
     tbody.innerHTML = filtrados.map(s => `
       <tr>
-        <td><strong>${s.nombre}</strong></td>
+        <td class="celda-nombre-pl"><strong>${s.nombre}</strong></td>
         <td><span class="badge badge-morado">${s.seccion}</span></td>
         <td>
           ${s.asistio
-            ? '<span class="badge badge-verde">Confirmado</span>'
-            : '<span class="badge badge-ambar">Pendiente</span>'}
-        </td>
-        <td>
-          ${s.asistio
             ? '<button type="button" class="btn btn-sm btn-gris" disabled style="opacity:0.78; cursor:not-allowed;">🔒 Confirmado</button>'
-            : `<button type="button" class="btn btn-sm btn-verde" onclick="toggleAsistencia(${s.id}, true)">✓ Confirmar Asistencia</button>`}
+            : `<button type="button" class="btn btn-sm btn-verde" onclick="toggleAsistencia(${s.id}, true)">✓ Confirmar</button>`}
         </td>
       </tr>
     `).join('');
