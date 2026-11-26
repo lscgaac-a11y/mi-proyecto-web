@@ -582,6 +582,78 @@ td.no-print {
 }
 
 /* ==========================================
+   BARRA DE PAGINACIÓN (30 POR PÁGINA)
+   ========================================== */
+.paginacion-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: #faf7ff;
+  border: 1px solid var(--morado-borde);
+  border-radius: 10px;
+}
+
+.paginacion-info {
+  font-size: 0.84rem;
+  color: var(--texto-suave);
+}
+
+.paginacion-info strong {
+  color: var(--morado-oscuro);
+}
+
+.paginacion-detalle {
+  color: var(--texto-suave);
+}
+
+.paginacion-controles {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.btn-pag {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d8b4fe;
+  border-radius: 7px;
+  background: var(--blanco);
+  color: var(--morado-oscuro);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.btn-pag:hover:not(:disabled) {
+  background: var(--morado-suave);
+  border-color: var(--morado-principal);
+}
+
+.btn-pag.activo {
+  background: var(--morado-principal);
+  border-color: var(--morado-oscuro);
+  color: var(--blanco);
+}
+
+.btn-pag:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.paginacion-puntos {
+  padding: 0 4px;
+  color: var(--texto-suave);
+  font-weight: 700;
+}
+
+/* ==========================================
    FILAS DESPLEGABLES EN AVANCE POR PROMOTOR
    ========================================== */
 tr.fila-promotor-click {
@@ -860,6 +932,17 @@ tr.fila-detalle-promotor > td {
   .form-grid,
   .filtros-bar {
     grid-template-columns: 1fr;
+  }
+
+  .paginacion-barra {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 10px;
+  }
+
+  .paginacion-controles {
+    justify-content: center;
   }
 
   body.rol-pase-lista th,

@@ -8,6 +8,7 @@ const SECCIONES_CUNDUACAN = [
 ];
 
 const META_SIMPATIZANTES_PROMOTOR = 15;
+const REGISTROS_POR_PAGINA = 30;
 
 let usuarioActual = null;
 let cacheAvances = [];
@@ -19,6 +20,16 @@ let seccionesSeleccionadasEst = new Set();
 let promotoresExpandidos = new Set();
 let destinoINEActual = null;
 
+const estadoPaginacion = {
+  avances: { pagina: 1, filtroHash: '' },
+  avancePromotores: { pagina: 1, filtroHash: '' },
+  simpatizantes: { pagina: 1, filtroHash: '' },
+  paseLista: { pagina: 1, filtroHash: '' },
+  promotores: { pagina: 1, filtroHash: '' },
+  estructura: { pagina: 1, filtroHash: '' },
+  usuarios: { pagina: 1, filtroHash: '' }
+};
+
 function esSuperUsuario() {
   return usuarioActual && usuarioActual.rol === 'admin';
 }
@@ -29,6 +40,133 @@ function esCapturista() {
 
 function esPaseLista() {
   return usuarioActual && usuarioActual.rol === 'pase_lista';
+}
+
+// ==========================================
+// PAGINACIÓN (30 REGISTROS POR PÁGINA)
+// ==========================================
+function paginarLista(clave, items, filtroHash = '') {
+  if (!estadoPaginacion[clave]) {
+    estadoPaginacion[clave] = { pagina: 1, filtroHash: '' };
+  }
+  const estado = estadoPaginacion[clave];
+
+  if (estado.filtroHash !== filtroHash) {
+    estado.pagina = 1;
+    estado.filtroHash = filtroHash;
+  }
+
+  const total = items.length;
+  const totalPaginas = Math.max(1, Math.ceil(total / REGISTROS_POR_PAGINA));
+  if (estado.pagina > totalPaginas) estado.pagina = totalPaginas;
+  if (estado.pagina < 1) estado.pagina = 1;
+
+  const inicio = (estado.pagina - 1) * REGISTROS_POR_PAGINA;
+  const fin = Math.min(inicio + REGISTROS_POR_PAGINA, total);
+
+  return {
+    itemsPagina: items.slice(inicio, fin),
+    pagina: estado.pagina,
+    totalPaginas,
+    total,
+    inicio: total === 0 ? 0 : inicio + 1,
+    fin
+  };
+}
+
+function obtenerRangoPaginasVisible(actual, totalPaginas) {
+  if (totalPaginas <= 5) {
+    return Array.from({ length: totalPaginas }, (_, i) => i + 1);
+  }
+  const paginas = [1];
+  const inicio = Math.max(2, actual - 1);
+  const fin = Math.min(totalPaginas - 1, actual + 1);
+
+  if (inicio > 2) paginas.push('...');
+  for (let p = inicio; p <= fin; p++) {
+    paginas.push(p);
+  }
+  if (fin < totalPaginas - 1) paginas.push('...');
+  paginas.push(totalPaginas);
+  return paginas;
+}
+
+function renderizarPaginacion(clave, tbody, meta) {
+  if (!tbody) return;
+  const tablaWrap = tbody.closest('.tabla-wrap');
+  if (!tablaWrap) return;
+
+  let contenedor = document.getElementById(`paginacion-${clave}`);
+  if (!contenedor) {
+    contenedor = document.createElement('div');
+    contenedor.id = `paginacion-${clave}`;
+    contenedor.className = 'paginacion-barra no-print';
+    tablaWrap.insertAdjacentElement('afterend', contenedor);
+  }
+
+  if (meta.total === 0) {
+    contenedor.innerHTML = '';
+    contenedor.classList.add('oculto');
+    return;
+  }
+
+  contenedor.classList.remove('oculto');
+
+  let botonesHtml = '';
+  if (meta.totalPaginas > 1) {
+    const rango = obtenerRangoPaginasVisible(meta.pagina, meta.totalPaginas);
+    const numerosHtml = rango.map(item => {
+      if (item === '...') {
+        return '<span class="paginacion-puntos">…</span>';
+      }
+      const activa = item === meta.pagina ? 'activo' : '';
+      return `<button type="button" class="btn-pag ${activa}" onclick="cambiarPagina('${clave}', ${item})">${item}</button>`;
+    }).join('');
+
+    botonesHtml = `
+      <div class="paginacion-controles">
+        <button type="button" class="btn-pag" onclick="cambiarPagina('${clave}', 1)" ${meta.pagina === 1 ? 'disabled' : ''} title="Primera página">«</button>
+        <button type="button" class="btn-pag" onclick="cambiarPagina('${clave}', ${meta.pagina - 1})" ${meta.pagina === 1 ? 'disabled' : ''}>‹ Anterior</button>
+        ${numerosHtml}
+        <button type="button" class="btn-pag" onclick="cambiarPagina('${clave}', ${meta.pagina + 1})" ${meta.pagina === meta.totalPaginas ? 'disabled' : ''}>Siguiente ›</button>
+        <button type="button" class="btn-pag" onclick="cambiarPagina('${clave}', ${meta.totalPaginas})" ${meta.pagina === meta.totalPaginas ? 'disabled' : ''} title="Última página">»</button>
+      </div>
+    `;
+  }
+
+  contenedor.innerHTML = `
+    <div class="paginacion-info">
+      Mostrando <strong>${meta.inicio}–${meta.fin}</strong> de <strong>${meta.total}</strong> registros
+      <span class="paginacion-detalle">· Página ${meta.pagina} de ${meta.totalPaginas}</span>
+    </div>
+    ${botonesHtml}
+  `;
+}
+
+function cambiarPagina(clave, nuevaPagina) {
+  if (!estadoPaginacion[clave]) return;
+  estadoPaginacion[clave].pagina = nuevaPagina;
+
+  const mapaRenders = {
+    avances: { fn: renderizarAvances, tbodyId: 'tabla-avances-body' },
+    avancePromotores: { fn: renderizarAvancePromotores, tbodyId: 'tabla-avance-promotores-body' },
+    simpatizantes: { fn: renderizarSimpatizantes, tbodyId: 'tabla-simpatizantes-body' },
+    paseLista: { fn: renderizarPaseLista, tbodyId: 'tabla-pase-lista-body' },
+    promotores: { fn: renderizarPromotores, tbodyId: 'tabla-promotores-body' },
+    estructura: { fn: renderizarEstructura, tbodyId: 'tabla-estructura-body' },
+    usuarios: { fn: renderizarUsuariosTabla, tbodyId: 'tabla-usuarios-body' }
+  };
+
+  const destino = mapaRenders[clave];
+  if (!destino) return;
+
+  destino.fn();
+
+  const tbody = document.getElementById(destino.tbodyId);
+  const tarjeta = tbody ? tbody.closest('.card') : null;
+  if (tarjeta) {
+    tarjeta.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 // ==========================================
@@ -649,7 +787,11 @@ function renderizarAvances() {
   document.getElementById('barra-secciones-activas').style.width = `${pctSecciones}%`;
 
   const filas = obtenerFilasAvances();
-  tbody.innerHTML = filas.map(r => `
+  const fSec = (document.getElementById('filtro-avances-seccion')?.value || '').trim();
+  const fEst = document.getElementById('filtro-avances-estado')?.value || 'todas';
+  const meta = paginarLista('avances', filas, `${fSec}|${fEst}`);
+
+  tbody.innerHTML = meta.itemsPagina.map(r => `
     <tr>
       <td><span class="badge badge-morado">${r.seccion}</span></td>
       <td>${r.coordinador === 'Sin asignar' ? '<span style="color:#9ca3af;">Sin asignar</span>' : r.coordinador}</td>
@@ -665,6 +807,8 @@ function renderizarAvances() {
       </td>
     </tr>
   `).join('');
+
+  renderizarPaginacion('avances', tbody, meta);
 }
 
 function exportarExcelAvances() {
@@ -782,8 +926,12 @@ function renderizarAvancePromotores() {
   document.getElementById('ap-barra-global').style.width = `${Math.min(100, Number(pctGlobal))}%`;
 
   const filtrados = obtenerAvancePromotoresFiltrados();
+  const fSec = (document.getElementById('filtro-ap-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-ap-busqueda')?.value || '').trim().toUpperCase();
+  const fEst = document.getElementById('filtro-ap-estado')?.value || 'todos';
+  const meta = paginarLista('avancePromotores', filtrados, `${fSec}|${fBusq}|${fEst}`);
 
-  tbody.innerHTML = filtrados.map(p => {
+  tbody.innerHTML = meta.itemsPagina.map(p => {
     const pctTexto = `${p.porcentaje.toFixed(1)}%`;
     const anchoBarra = Math.min(100, p.porcentaje).toFixed(1);
     const badgeClase = p.cantidad >= META_SIMPATIZANTES_PROMOTOR
@@ -872,6 +1020,8 @@ function renderizarAvancePromotores() {
 
     return filaPromotor + filaDetalle;
   }).join('');
+
+  renderizarPaginacion('avancePromotores', tbody, meta);
 }
 
 function exportarExcelAvancePromotores() {
@@ -1111,7 +1261,12 @@ function renderizarSimpatizantes() {
   const filtrados = obtenerSimpatizantesFiltrados();
   document.getElementById('contador-simpatizantes').textContent = filtrados.length;
 
-  tbody.innerHTML = filtrados.map(s => `
+  const fSec = (document.getElementById('filtro-simp-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-simp-busqueda')?.value || '').trim().toUpperCase();
+  const fAsis = document.getElementById('filtro-simp-asistencia')?.value || 'todos';
+  const meta = paginarLista('simpatizantes', filtrados, `${fSec}|${fBusq}|${fAsis}`);
+
+  tbody.innerHTML = meta.itemsPagina.map(s => `
     <tr>
       <td>
         <input type="checkbox" ${s.asistio ? 'checked' : ''} onchange="toggleAsistencia(${s.id}, this.checked)" style="width:18px; height:18px; accent-color: var(--morado-principal); cursor:pointer;" />
@@ -1129,6 +1284,8 @@ function renderizarSimpatizantes() {
       </td>
     </tr>
   `).join('');
+
+  renderizarPaginacion('simpatizantes', tbody, meta);
 }
 
 function obtenerPaseListaFiltrado() {
@@ -1195,8 +1352,14 @@ function renderizarPaseLista() {
   if (plAsisEl) plAsisEl.textContent = asistieron;
   if (plPendEl) plPendEl.textContent = filtrados.length - asistieron;
 
+  const fSec = (document.getElementById('pl-filtro-seccion')?.value || '').trim();
+  const fNom = (document.getElementById('pl-filtro-nombre')?.value || '').trim().toUpperCase();
+  const fEst = document.getElementById('pl-filtro-estado')?.value || 'todos';
+  const secFija = soloBasicoPaseLista ? String(usuarioActual.seccion_asignada || '') : fSec;
+  const meta = paginarLista('paseLista', filtrados, `${secFija}|${fNom}|${fEst}`);
+
   if (soloBasicoPaseLista) {
-    tbody.innerHTML = filtrados.map(s => `
+    tbody.innerHTML = meta.itemsPagina.map(s => `
       <tr>
         <td class="celda-nombre-pl"><strong>${s.nombre}</strong></td>
         <td><span class="badge badge-morado">${s.seccion}</span></td>
@@ -1207,10 +1370,11 @@ function renderizarPaseLista() {
         </td>
       </tr>
     `).join('');
+    renderizarPaginacion('paseLista', tbody, meta);
     return;
   }
 
-  tbody.innerHTML = filtrados.map(s => `
+  tbody.innerHTML = meta.itemsPagina.map(s => `
     <tr>
       <td>
         ${s.asistio
@@ -1228,6 +1392,8 @@ function renderizarPaseLista() {
       </td>
     </tr>
   `).join('');
+
+  renderizarPaginacion('paseLista', tbody, meta);
 }
 
 function exportarExcelPaseLista() {
@@ -1503,7 +1669,11 @@ function renderizarPromotores() {
   const filtrados = obtenerPromotoresFiltrados();
   document.getElementById('contador-promotores').textContent = filtrados.length;
 
-  tbody.innerHTML = filtrados.map(p => {
+  const fSec = (document.getElementById('filtro-prom-seccion')?.value || '').trim();
+  const fBusq = (document.getElementById('filtro-prom-busqueda')?.value || '').trim().toUpperCase();
+  const meta = paginarLista('promotores', filtrados, `${fSec}|${fBusq}`);
+
+  tbody.innerHTML = meta.itemsPagina.map(p => {
     const nombreProm = String(p.nombre || '').trim().toUpperCase();
     const totalReferidos = cacheSimpatizantes.filter(
       s => String(s.referencia || '').trim().toUpperCase() === nombreProm
@@ -1523,6 +1693,8 @@ function renderizarPromotores() {
       </tr>
     `;
   }).join('');
+
+  renderizarPaginacion('promotores', tbody, meta);
 }
 
 async function guardarPromotor(e) {
@@ -1758,7 +1930,12 @@ function renderizarEstructura() {
   const filtrados = obtenerEstructuraFiltrada();
   document.getElementById('contador-estructura').textContent = filtrados.length;
 
-  tbody.innerHTML = filtrados.map(e => `
+  const fZona = document.getElementById('filtro-est-zona')?.value || '';
+  const fRol = document.getElementById('filtro-est-rol')?.value || '';
+  const fBusq = (document.getElementById('filtro-est-busqueda')?.value || '').trim().toUpperCase();
+  const meta = paginarLista('estructura', filtrados, `${fZona}|${fRol}|${fBusq}`);
+
+  tbody.innerHTML = meta.itemsPagina.map(e => `
     <tr>
       <td><strong>Zona ${e.zona}</strong></td>
       <td>${e.ruta ? 'Ruta ' + e.ruta : '-'}</td>
@@ -1773,6 +1950,8 @@ function renderizarEstructura() {
       </td>
     </tr>
   `).join('');
+
+  renderizarPaginacion('estructura', tbody, meta);
 }
 
 async function guardarEstructura(e) {
@@ -1958,14 +2137,13 @@ async function cambiarRolUsuario(id) {
   }
 }
 
-async function cargarUsuarios() {
-  const res = await fetch('/api/usuarios');
-  if (!res.ok) return;
-  cacheUsuarios = await res.json();
+function renderizarUsuariosTabla() {
   const tbody = document.getElementById('tabla-usuarios-body');
   if (!tbody) return;
 
-  tbody.innerHTML = cacheUsuarios.map(u => {
+  const meta = paginarLista('usuarios', cacheUsuarios, 'all');
+
+  tbody.innerHTML = meta.itemsPagina.map(u => {
     if (u.usuario === 'admin') {
       return `
         <tr>
@@ -2003,6 +2181,15 @@ async function cargarUsuarios() {
       </tr>
     `;
   }).join('');
+
+  renderizarPaginacion('usuarios', tbody, meta);
+}
+
+async function cargarUsuarios() {
+  const res = await fetch('/api/usuarios');
+  if (!res.ok) return;
+  cacheUsuarios = await res.json();
+  renderizarUsuariosTabla();
 }
 
 function exportarPDFUsuarios() {
