@@ -225,7 +225,7 @@ function navegarA(idSeccion, titulo) {
 }
 
 // ==========================================
-// ESCANEO RÁPIDO DE CREDENCIAL INE
+// ESCANEO RÁPIDO DE CREDENCIAL INE CON VALIDACIÓN DE VIGENCIA
 // ==========================================
 function iniciarEscaneoINE(destino) {
   destinoINEActual = destino;
@@ -306,6 +306,29 @@ function desbloquearCamposINE(ids) {
   });
 }
 
+function limpiarCamposINEPorDestino(destino) {
+  if (destino === 'simpatizante') {
+    const ids = ['simp-nombre', 'simp-curp', 'simp-clave-elector', 'simp-seccion', 'simp-localidad'];
+    desbloquearCamposINE(ids);
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  } else if (destino === 'promotor') {
+    const ids = ['prom-nombre', 'prom-seccion', 'prom-localidad'];
+    desbloquearCamposINE(ids);
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  } else if (destino === 'estructura') {
+    ['est-nombres', 'est-apellidos', 'est-localidad'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+}
+
 function configurarListenerCamaraINE() {
   const input = document.getElementById('input-foto-ine');
   if (!input) return;
@@ -318,7 +341,7 @@ function configurarListenerCamaraINE() {
     const inicio = performance.now();
 
     try {
-      mostrarEstadoINE(destino, 'Leyendo credencial INE...', 'info');
+      mostrarEstadoINE(destino, 'Leyendo credencial INE y verificando vigencia...', 'info');
       const imagenBase64 = await optimizarImagenINE(archivo);
 
       const res = await fetch('/api/ine/escanear', {
@@ -329,11 +352,12 @@ function configurarListenerCamaraINE() {
 
       const data = await res.json();
       if (!res.ok || !data.ok) {
+        limpiarCamposINEPorDestino(destino);
         mostrarEstadoINE(destino, data.error || 'No se pudo leer la credencial.', 'error');
         return;
       }
 
-      const { nombres, apellidos, curp, clave_elector, seccion, localidad, es_seccion_cunduacan } = data.datos;
+      const { nombres, apellidos, curp, clave_elector, seccion, vigencia, localidad, es_seccion_cunduacan } = data.datos;
       const nombreCompleto = `${apellidos || ''} ${nombres || ''}`.trim();
 
       if (destino === 'simpatizante') {
@@ -363,20 +387,21 @@ function configurarListenerCamaraINE() {
       if (seccion && !es_seccion_cunduacan) {
         mostrarEstadoINE(
           destino,
-          `Leída en ${segundos}s, pero la sección ${seccion} no pertenece a las 60 secciones de Cunduacán.`,
+          `Credencial vigente (${vigencia}) leída en ${segundos}s, pero la sección ${seccion} no pertenece a las 60 secciones de Cunduacán.`,
           'alerta'
         );
       } else if (esCapturista()) {
         mostrarEstadoINE(
           destino,
-          `Credencial leída en ${segundos}s. Datos de INE bloqueados; captura manualmente los campos restantes y guarda.`,
+          `Credencial vigente (${vigencia}) leída en ${segundos}s. Datos de INE bloqueados; captura manualmente los campos restantes y guarda.`,
           'ok'
         );
       } else {
-        mostrarEstadoINE(destino, `Credencial leída en ${segundos}s. Verifica los datos y guarda.`, 'ok');
+        mostrarEstadoINE(destino, `Credencial vigente (${vigencia}) leída en ${segundos}s. Verifica los datos y guarda.`, 'ok');
       }
     } catch (error) {
       console.error('Error escaneo INE:', error);
+      limpiarCamposINEPorDestino(destino);
       mostrarEstadoINE(destino, 'Error de conexión al procesar la credencial.', 'error');
     }
   });

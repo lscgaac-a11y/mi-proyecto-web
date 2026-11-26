@@ -50,6 +50,12 @@ function normalizarSeccion(sec) {
   return digitos ? digitos.padStart(4, '0') : '';
 }
 
+function normalizarVigencia(vig) {
+  const coincidencias = String(vig || '').match(/\b(19\d{2}|20\d{2})\b/g);
+  if (!coincidencias || coincidencias.length === 0) return null;
+  return Number(coincidencias[coincidencias.length - 1]);
+}
+
 function limpiarDireccionINE(dir) {
   let texto = normalizarTexto(dir)
     .normalize('NFD')
@@ -173,7 +179,7 @@ async function inicializarBD() {
 }
 
 // ==========================================
-// ESCANEO RÁPIDO DE CREDENCIAL INE CON GEMINI
+// ESCANEO RÁPIDO DE CREDENCIAL INE CON VALIDACIÓN DE VIGENCIA
 // ==========================================
 app.post('/api/ine/escanear', async (req, res) => {
   try {
@@ -195,6 +201,7 @@ app.post('/api/ine/escanear', async (req, res) => {
       'curp (18 caracteres alfanuméricos en mayúsculas sin espacios), ' +
       'clave_elector (18 caracteres alfanuméricos en mayúsculas sin espacios), ' +
       'seccion (4 dígitos), ' +
+      'vigencia (año de vencimiento de 4 dígitos impreso en el campo VIGENCIA; si aparece un rango como 2016-2026, devuelve el año final), ' +
       'localidad (dirección completa del domicilio: calle, número exterior/interior, manzana/lote, carretera/km y colonia, ranchería, ejido o poblado en mayúsculas sin acentos; EXCLUYE únicamente el código postal de 5 dígitos, el municipio y el estado).';
 
     const response = await generarRapidoConReintentos(ai, {
@@ -226,9 +233,10 @@ app.post('/api/ine/escanear', async (req, res) => {
             curp: { type: Type.STRING },
             clave_elector: { type: Type.STRING },
             seccion: { type: Type.STRING },
+            vigencia: { type: Type.STRING },
             localidad: { type: Type.STRING }
           },
-          required: ['es_ine_valida', 'apellidos', 'nombres', 'curp', 'clave_elector', 'seccion', 'localidad']
+          required: ['es_ine_valida', 'apellidos', 'nombres', 'curp', 'clave_elector', 'seccion', 'vigencia', 'localidad']
         }
       }
     });
@@ -238,6 +246,21 @@ app.post('/api/ine/escanear', async (req, res) => {
     if (!datos.es_ine_valida) {
       return res.status(400).json({
         error: 'No se detectó una credencial INE legible. Toma la foto más cerca y con buena luz.'
+      });
+    }
+
+    const anioActual = new Date().getFullYear();
+    const anioVigencia = normalizarVigencia(datos.vigencia);
+
+    if (!anioVigencia) {
+      return res.status(400).json({
+        error: 'No se pudo leer el año de VIGENCIA en la credencial. Toma una foto completa donde se vea la vigencia.'
+      });
+    }
+
+    if (anioVigencia < anioActual) {
+      return res.status(400).json({
+        error: `Credencial INE vencida (Vigencia: ${anioVigencia}). Solo se aceptan credenciales vigentes (${anioActual} o posterior).`
       });
     }
 
@@ -253,6 +276,7 @@ app.post('/api/ine/escanear', async (req, res) => {
         curp: normalizarCodigoINE(datos.curp),
         clave_elector: normalizarCodigoINE(datos.clave_elector),
         seccion: seccionNorm,
+        vigencia: anioVigencia,
         localidad: limpiarDireccionINE(datos.localidad),
         es_seccion_cunduacan: esSeccionCunduacan
       }
