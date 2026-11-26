@@ -430,10 +430,24 @@ function iniciarSesionUI() {
   const cardTablaProm = document.getElementById('card-tabla-promotores');
   const btnImprimir = document.getElementById('btn-topbar-imprimir');
   const plFiltroSeccion = document.getElementById('pl-filtro-seccion');
+  const secPaseLista = document.getElementById('sec-pase-lista');
+  const kpiPaseLista = document.getElementById('pl-total')?.closest('.grid-kpi');
 
+  document.body.classList.remove('rol-pase-lista');
   if (cardTablaSimp) cardTablaSimp.classList.remove('oculto');
   if (cardTablaProm) cardTablaProm.classList.remove('oculto');
   if (btnImprimir) btnImprimir.classList.remove('oculto');
+  if (kpiPaseLista) kpiPaseLista.classList.remove('oculto');
+  if (secPaseLista) {
+    secPaseLista.querySelectorAll('.acciones-excel, button').forEach(el => {
+      if (
+        el.classList.contains('acciones-excel') ||
+        /exportar|print|imprimir/i.test(el.getAttribute('onclick') || '')
+      ) {
+        el.classList.remove('oculto');
+      }
+    });
+  }
   if (plFiltroSeccion) {
     plFiltroSeccion.classList.remove('oculto');
     plFiltroSeccion.value = '';
@@ -445,11 +459,28 @@ function iniciarSesionUI() {
   }
 
   if (esPaseLista()) {
+    document.body.classList.add('rol-pase-lista');
     document.querySelectorAll('#sidebar-menu .menu-item').forEach(btn => {
       if (btn.dataset.vista !== 'sec-pase-lista') btn.classList.add('oculto');
     });
     if (plFiltroSeccion) {
       plFiltroSeccion.classList.add('oculto');
+    }
+    if (btnImprimir) {
+      btnImprimir.classList.add('oculto');
+    }
+    if (kpiPaseLista) {
+      kpiPaseLista.classList.add('oculto');
+    }
+    if (secPaseLista) {
+      secPaseLista.querySelectorAll('.acciones-excel, button').forEach(el => {
+        if (
+          el.classList.contains('acciones-excel') ||
+          /exportar|print|imprimir/i.test(el.getAttribute('onclick') || '')
+        ) {
+          el.classList.add('oculto');
+        }
+      });
     }
     cargarSimpatizantes();
     navegarA('sec-pase-lista', `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`);
@@ -1100,9 +1131,13 @@ function renderizarPaseLista() {
 
   const filtrados = obtenerPaseListaFiltrado();
   const asistieron = filtrados.filter(s => s.asistio).length;
-  document.getElementById('pl-total').textContent = filtrados.length;
-  document.getElementById('pl-asistieron').textContent = asistieron;
-  document.getElementById('pl-pendientes').textContent = filtrados.length - asistieron;
+
+  const plTotalEl = document.getElementById('pl-total');
+  const plAsisEl = document.getElementById('pl-asistieron');
+  const plPendEl = document.getElementById('pl-pendientes');
+  if (plTotalEl) plTotalEl.textContent = filtrados.length;
+  if (plAsisEl) plAsisEl.textContent = asistieron;
+  if (plPendEl) plPendEl.textContent = filtrados.length - asistieron;
 
   if (soloBasicoPaseLista) {
     tbody.innerHTML = filtrados.map(s => `
@@ -1145,22 +1180,17 @@ function renderizarPaseLista() {
 }
 
 function exportarExcelPaseLista() {
-  const lista = obtenerPaseListaFiltrado();
-  const datos = esPaseLista()
-    ? lista.map(s => ({
-        Nombre: s.nombre,
-        Seccion: s.seccion,
-        Status: s.asistio ? 'CONFIRMADO' : 'PENDIENTE'
-      }))
-    : lista.map(s => ({
-        Estado: s.asistio ? 'ASISTIO' : 'PENDIENTE',
-        Seccion: s.seccion,
-        Nombre: s.nombre,
-        CURP: s.curp || '',
-        Clave_Elector: s.clave_elector || '',
-        Localidad: s.localidad || '',
-        Referencia: s.referencia || ''
-      }));
+  if (esPaseLista()) return;
+
+  const datos = obtenerPaseListaFiltrado().map(s => ({
+    Estado: s.asistio ? 'ASISTIO' : 'PENDIENTE',
+    Seccion: s.seccion,
+    Nombre: s.nombre,
+    CURP: s.curp || '',
+    Clave_Elector: s.clave_elector || '',
+    Localidad: s.localidad || '',
+    Referencia: s.referencia || ''
+  }));
 
   const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
@@ -1169,26 +1199,9 @@ function exportarExcelPaseLista() {
 }
 
 function exportarPDFPaseLista() {
-  const lista = obtenerPaseListaFiltrado();
+  if (esPaseLista()) return;
 
-  if (esPaseLista()) {
-    const filas = lista.map(s => [
-      s.nombre,
-      s.seccion,
-      s.asistio ? 'CONFIRMADO' : 'PENDIENTE'
-    ]);
-    generarPDFTabla({
-      titulo: `Pase de Lista · Sección ${usuarioActual.seccion_asignada || ''}`,
-      subtitulo: 'Control de asistencia seccional',
-      columnas: ['Nombre Completo', 'Sección', 'Status'],
-      filas,
-      nombreArchivo: `Pase_de_Lista_Seccion_${usuarioActual.seccion_asignada || '2027'}.pdf`,
-      orientacion: 'portrait'
-    });
-    return;
-  }
-
-  const filas = lista.map(s => [
+  const filas = obtenerPaseListaFiltrado().map(s => [
     s.asistio ? 'ASISTIÓ' : 'PENDIENTE',
     s.seccion,
     s.nombre,

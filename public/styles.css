@@ -830,6 +830,10 @@ tr.fila-detalle-promotor > td {
 }
 
 @media print {
+  body.rol-pase-lista .main-content {
+    display: none !important;
+  }
+
   .sidebar,
   .sidebar-overlay,
   .no-print {
